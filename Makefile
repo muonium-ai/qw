@@ -38,7 +38,7 @@ NC := \033[0m # No Color
 
 .PHONY: all clean build build-mac build-ios build-ipad build-all \
         deploy deploy-mac deploy-ios deploy-ipad \
-        test run icons help check-tools
+        test run icons help check-tools install install-cli uninstall
 
 # Default target
 all: build-all
@@ -68,6 +68,17 @@ help:
 	@echo "  make run          - Build and run on macOS"
 	@echo "  make icons        - Generate app icons from qw_logo.png"
 	@echo "  make check-tools  - Verify required tools are installed"
+	@echo ""
+	@echo "$(YELLOW)Installation:$(NC)"
+	@echo "  make install      - Install app to /Applications and CLI to /usr/local/bin"
+	@echo "  make install-cli  - Install only the 'qw' command line tool"
+	@echo "  make uninstall    - Remove app and CLI tool"
+	@echo ""
+	@echo "$(YELLOW)CLI Usage:$(NC)"
+	@echo "  qw                - Open QW Editor"
+	@echo "  qw file.txt       - Open a file"
+	@echo "  qw .              - Open current folder"
+	@echo "  qw -h             - Show CLI help"
 	@echo ""
 
 #------------------------------------------------------------------------------
@@ -313,3 +324,46 @@ export-mac: archive-mac
 		-exportPath $(BUILD_DIR)/export \
 		-exportOptionsPlist ExportOptions.plist
 	@echo "$(GREEN)App exported to $(BUILD_DIR)/export$(NC)"
+
+#------------------------------------------------------------------------------
+# Install App and CLI
+#------------------------------------------------------------------------------
+install: build-mac install-cli
+	@echo "$(YELLOW)Installing QW Editor to /Applications...$(NC)"
+	@if [ -d "/Applications/qw.app" ]; then \
+		rm -rf "/Applications/qw.app"; \
+	fi
+	@cp -R "$(DERIVED_DATA)/Build/Products/Release/qw.app" "/Applications/"
+	@echo "$(GREEN)QW Editor installed to /Applications/qw.app$(NC)"
+	@echo "$(GREEN)You can now use 'qw' command from terminal$(NC)"
+
+#------------------------------------------------------------------------------
+# Install CLI Only
+#------------------------------------------------------------------------------
+install-cli:
+	@echo "$(YELLOW)Installing 'qw' command line tool...$(NC)"
+	@mkdir -p /usr/local/bin
+	@cp cli/qw /usr/local/bin/qw
+	@chmod +x /usr/local/bin/qw
+	@echo "$(GREEN)CLI installed to /usr/local/bin/qw$(NC)"
+	@echo ""
+	@echo "Usage:"
+	@echo "  qw                 - Open QW Editor"
+	@echo "  qw file.txt        - Open a file"
+	@echo "  qw .               - Open current folder"
+	@echo "  qw -h              - Show help"
+
+#------------------------------------------------------------------------------
+# Uninstall
+#------------------------------------------------------------------------------
+uninstall:
+	@echo "$(YELLOW)Uninstalling QW Editor...$(NC)"
+	@if [ -d "/Applications/qw.app" ]; then \
+		rm -rf "/Applications/qw.app"; \
+		echo "$(GREEN)Removed /Applications/qw.app$(NC)"; \
+	fi
+	@if [ -f "/usr/local/bin/qw" ]; then \
+		rm -f "/usr/local/bin/qw"; \
+		echo "$(GREEN)Removed /usr/local/bin/qw$(NC)"; \
+	fi
+	@echo "$(GREEN)Uninstall complete$(NC)"

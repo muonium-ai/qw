@@ -1,0 +1,106 @@
+#!/bin/bash
+#
+# qw - Command line interface for QW Editor
+# Usage: qw [file|folder] [file2] [file3] ...
+#
+# Examples:
+#   qw                    # Open QW Editor
+#   qw .                  # Open current folder
+#   qw file.txt           # Open a file
+#   qw ~/Documents        # Open a folder
+#   qw file1.py file2.js  # Open multiple files
+#
+
+APP_NAME="qw"
+APP_PATH="/Applications/qw.app"
+BUNDLE_ID="muonium.qw"
+
+# Check if app exists in /Applications
+if [ ! -d "$APP_PATH" ]; then
+    # Try to find in build directory (for development)
+    DEV_PATH="$(dirname "$0")/../build/DerivedData/Build/Products/Release/qw.app"
+    if [ -d "$DEV_PATH" ]; then
+        APP_PATH="$DEV_PATH"
+    else
+        # Try to find using mdfind
+        APP_PATH=$(mdfind "kMDItemCFBundleIdentifier == '$BUNDLE_ID'" | head -1)
+        if [ -z "$APP_PATH" ]; then
+            echo "Error: QW Editor not found. Please install it first."
+            echo "Run 'make install' from the qw-editor directory."
+            exit 1
+        fi
+    fi
+fi
+
+# Function to convert to absolute path
+to_absolute_path() {
+    local path="$1"
+    if [[ "$path" = /* ]]; then
+        echo "$path"
+    else
+        echo "$(cd "$(dirname "$path")" 2>/dev/null && pwd)/$(basename "$path")"
+    fi
+}
+
+# If no arguments, just open the app
+if [ $# -eq 0 ]; then
+    open -a "$APP_PATH"
+    exit 0
+fi
+
+# Process arguments
+FILES=()
+for arg in "$@"; do
+    case "$arg" in
+        -h|--help)
+            echo "QW Editor - Lightweight text editor"
+            echo ""
+            echo "Usage: qw [options] [file|folder...]"
+            echo ""
+            echo "Options:"
+            echo "  -h, --help     Show this help message"
+            echo "  -v, --version  Show version information"
+            echo "  -n, --new      Open a new empty window"
+            echo "  -w, --wait     Wait for the file to be closed"
+            echo ""
+            echo "Examples:"
+            echo "  qw                    Open QW Editor"
+            echo "  qw .                  Open current folder"
+            echo "  qw file.txt           Open a file"
+            echo "  qw ~/Documents        Open a folder"
+            echo "  qw *.py               Open all Python files"
+            exit 0
+            ;;
+        -v|--version)
+            echo "qw version 1.0.0"
+            exit 0
+            ;;
+        -n|--new)
+            open -n -a "$APP_PATH"
+            exit 0
+            ;;
+        -w|--wait)
+            WAIT_MODE=1
+            ;;
+        *)
+            # Check if file/folder exists
+            if [ -e "$arg" ]; then
+                FILES+=("$(to_absolute_path "$arg")")
+            else
+                echo "Warning: '$arg' does not exist, skipping."
+            fi
+            ;;
+    esac
+done
+
+# Open files/folders
+if [ ${#FILES[@]} -gt 0 ]; then
+    if [ "$WAIT_MODE" = "1" ]; then
+        open -a "$APP_PATH" -W "${FILES[@]}"
+    else
+        open -a "$APP_PATH" "${FILES[@]}"
+    fi
+else
+    # No valid files, just open the app
+    open -a "$APP_PATH"
+fi

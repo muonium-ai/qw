@@ -14,39 +14,48 @@ struct CodeEditorView: View {
     @Environment(\.colorScheme) private var colorScheme
     
     @State private var lineCount: Int = 1
-    @State private var scrollOffset: CGFloat = 0
     
     private var theme: SyntaxTheme {
         colorScheme == .dark ? .dark : .light
     }
     
     var body: some View {
-        GeometryReader { geometry in
-            HStack(alignment: .top, spacing: 0) {
-                // Line numbers
-                LineNumbersView(
-                    lineCount: lineCount,
-                    theme: theme
-                )
-                .frame(width: 50)
-                
-                Divider()
-                
-                // Editor
-                ScrollView(.vertical, showsIndicators: true) {
-                    HighlightedTextEditor(
-                        text: $text,
-                        fileType: fileType,
-                        theme: theme,
-                        onLineCountChange: { count in
-                            lineCount = count
-                        }
-                    )
-                    .frame(minHeight: geometry.size.height)
+        HStack(alignment: .top, spacing: 0) {
+            // Line numbers
+            LineNumbersView(
+                lineCount: lineCount,
+                theme: theme
+            )
+            .frame(width: 50)
+            .accessibilityIdentifier("lineNumbers")
+            
+            Divider()
+            
+            // Editor - no wrapping ScrollView since NSTextView has its own
+            #if os(macOS)
+            MacOSTextEditor(
+                text: $text,
+                fileType: fileType,
+                theme: theme,
+                onLineCountChange: { count in
+                    lineCount = count
                 }
-            }
-            .background(theme.background)
+            )
+            .accessibilityIdentifier("codeEditor")
+            #else
+            iOSTextEditor(
+                text: $text,
+                fileType: fileType,
+                theme: theme,
+                onLineCountChange: { count in
+                    lineCount = count
+                }
+            )
+            .accessibilityIdentifier("codeEditor")
+            #endif
         }
+        .background(theme.background)
+        .accessibilityIdentifier("editorContainer")
         .onAppear {
             updateLineCount()
         }
@@ -66,45 +75,18 @@ struct LineNumbersView: View {
     let theme: SyntaxTheme
     
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .trailing, spacing: 0) {
-                ForEach(1...max(1, lineCount), id: \.self) { line in
-                    Text("\(line)")
-                        .font(.system(.body, design: .monospaced))
-                        .foregroundColor(theme.lineNumber)
-                        .frame(height: 21) // Match line height
-                        .padding(.horizontal, 8)
-                }
+        VStack(alignment: .trailing, spacing: 0) {
+            ForEach(1...max(1, lineCount), id: \.self) { line in
+                Text("\(line)")
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundColor(theme.lineNumber)
+                    .frame(height: 21) // Match line height
+                    .padding(.horizontal, 8)
             }
-            .padding(.top, 8)
+            Spacer()
         }
+        .padding(.top, 8)
         .background(theme.background.opacity(0.5))
-    }
-}
-
-/// Text editor with syntax highlighting
-struct HighlightedTextEditor: View {
-    @Binding var text: String
-    let fileType: SupportedFileType
-    let theme: SyntaxTheme
-    let onLineCountChange: (Int) -> Void
-    
-    var body: some View {
-        #if os(macOS)
-        MacOSTextEditor(
-            text: $text,
-            fileType: fileType,
-            theme: theme,
-            onLineCountChange: onLineCountChange
-        )
-        #else
-        iOSTextEditor(
-            text: $text,
-            fileType: fileType,
-            theme: theme,
-            onLineCountChange: onLineCountChange
-        )
-        #endif
     }
 }
 

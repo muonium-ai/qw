@@ -20,6 +20,7 @@ struct DocumentEditorView: View {
             text: $document.text,
             fileType: fileType
         )
+        .accessibilityIdentifier("documentEditor")
         .onAppear {
             updateFileType()
         }

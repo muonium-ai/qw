@@ -219,14 +219,16 @@ class SyntaxHighlighter {
     private func tokenizePython(_ text: String) -> [Token] {
         var tokens: [Token] = []
         
-        // Comments
+        // Comments - must be first
         tokens.append(contentsOf: matchPattern(#"#.*$"#, in: text, type: .comment))
         
-        // Strings (triple quotes and single/double)
-        tokens.append(contentsOf: matchPattern(#"\"\"\"[\s\S]*?\"\"\""#, in: text, type: .string))
-        tokens.append(contentsOf: matchPattern(#"'''[\s\S]*?'''"#, in: text, type: .string))
-        tokens.append(contentsOf: matchPattern(#""[^"\\]*(?:\\.[^"\\]*)*""#, in: text, type: .string))
-        tokens.append(contentsOf: matchPattern(#"'[^'\\]*(?:\\.[^'\\]*)*'"#, in: text, type: .string))
+        // Triple-quoted strings (simplified)
+        tokens.append(contentsOf: matchPattern(#"\"\"\"[^\"]*\"\"\""#, in: text, type: .string))
+        tokens.append(contentsOf: matchPattern(#"'''[^']*'''"#, in: text, type: .string))
+        
+        // Simple strings (no escapes to avoid backtracking)
+        tokens.append(contentsOf: matchPattern(#""[^"\n]*""#, in: text, type: .string))
+        tokens.append(contentsOf: matchPattern(#"'[^'\n]*'"#, in: text, type: .string))
         
         // Numbers
         tokens.append(contentsOf: matchPattern(#"\b\d+\.?\d*\b"#, in: text, type: .number))
@@ -234,9 +236,9 @@ class SyntaxHighlighter {
         // Keywords
         tokens.append(contentsOf: matchKeywords(Self.pythonKeywords, in: text))
         
-        // Function definitions
-        tokens.append(contentsOf: matchPattern(#"(?<=def\s)\w+"#, in: text, type: .function))
-        tokens.append(contentsOf: matchPattern(#"(?<=class\s)\w+"#, in: text, type: .type))
+        // Function definitions (simple pattern without lookbehind)
+        tokens.append(contentsOf: matchPattern(#"\bdef\s+\w+"#, in: text, type: .function))
+        tokens.append(contentsOf: matchPattern(#"\bclass\s+\w+"#, in: text, type: .type))
         
         return tokens
     }
@@ -247,12 +249,12 @@ class SyntaxHighlighter {
         
         // Comments
         tokens.append(contentsOf: matchPattern(#"//.*$"#, in: text, type: .comment))
-        tokens.append(contentsOf: matchPattern(#"/\*[\s\S]*?\*/"#, in: text, type: .comment))
+        tokens.append(contentsOf: matchPattern(#"/\*[^*]*\*/"#, in: text, type: .comment))
         
-        // Strings
+        // Strings (simple patterns to avoid backtracking)
+        tokens.append(contentsOf: matchPattern(#"\"[^\"\n]*\""#, in: text, type: .string))
+        tokens.append(contentsOf: matchPattern(#"'[^'\n]*'"#, in: text, type: .string))
         tokens.append(contentsOf: matchPattern(#"`[^`]*`"#, in: text, type: .string))
-        tokens.append(contentsOf: matchPattern(#""[^"\\]*(?:\\.[^"\\]*)*""#, in: text, type: .string))
-        tokens.append(contentsOf: matchPattern(#"'[^'\\]*(?:\\.[^'\\]*)*'"#, in: text, type: .string))
         
         // Numbers
         tokens.append(contentsOf: matchPattern(#"\b\d+\.?\d*\b"#, in: text, type: .number))
@@ -260,8 +262,8 @@ class SyntaxHighlighter {
         // Keywords
         tokens.append(contentsOf: matchKeywords(Self.javascriptKeywords, in: text))
         
-        // Function names
-        tokens.append(contentsOf: matchPattern(#"(?<=function\s)\w+"#, in: text, type: .function))
+        // Function names (simple pattern without lookbehind)
+        tokens.append(contentsOf: matchPattern(#"\bfunction\s+\w+"#, in: text, type: .function))
         
         return tokens
     }
@@ -297,15 +299,15 @@ class SyntaxHighlighter {
     private func tokenizeHTML(_ text: String) -> [Token] {
         var tokens: [Token] = []
         
-        // Comments
-        tokens.append(contentsOf: matchPattern(#"<!--[\s\S]*?-->"#, in: text, type: .comment))
+        // Comments (simplified)
+        tokens.append(contentsOf: matchPattern(#"<!--[^>]*-->"#, in: text, type: .comment))
         
         // Tags
         tokens.append(contentsOf: matchPattern(#"</?[a-zA-Z][a-zA-Z0-9]*"#, in: text, type: .tag))
         tokens.append(contentsOf: matchPattern(#"/?\s*>"#, in: text, type: .tag))
         
-        // Attributes
-        tokens.append(contentsOf: matchPattern(#"\s[a-zA-Z-]+(?=\s*=)"#, in: text, type: .attribute))
+        // Attributes (simple pattern)
+        tokens.append(contentsOf: matchPattern(#"\s[a-zA-Z-]+="#, in: text, type: .attribute))
         
         // Strings
         tokens.append(contentsOf: matchPattern(#""[^"]*""#, in: text, type: .string))
@@ -318,14 +320,14 @@ class SyntaxHighlighter {
     private func tokenizeCSS(_ text: String) -> [Token] {
         var tokens: [Token] = []
         
-        // Comments
-        tokens.append(contentsOf: matchPattern(#"/\*[\s\S]*?\*/"#, in: text, type: .comment))
+        // Comments (simplified)
+        tokens.append(contentsOf: matchPattern(#"/\*[^*]*\*/"#, in: text, type: .comment))
         
-        // Selectors
-        tokens.append(contentsOf: matchPattern(#"[.#]?[a-zA-Z][a-zA-Z0-9_-]*(?=\s*\{)"#, in: text, type: .type))
+        // Selectors (simple pattern)
+        tokens.append(contentsOf: matchPattern(#"[.#]?[a-zA-Z][a-zA-Z0-9_-]*\s*\{"#, in: text, type: .type))
         
-        // Properties
-        tokens.append(contentsOf: matchPattern(#"[a-zA-Z-]+(?=\s*:)"#, in: text, type: .property))
+        // Properties (simple pattern)
+        tokens.append(contentsOf: matchPattern(#"\s+[a-zA-Z-]+:"#, in: text, type: .property))
         
         // Values
         tokens.append(contentsOf: matchPattern(#"#[0-9a-fA-F]{3,8}\b"#, in: text, type: .number))
@@ -342,14 +344,11 @@ class SyntaxHighlighter {
     private func tokenizeJSON(_ text: String) -> [Token] {
         var tokens: [Token] = []
         
-        // Property keys
-        tokens.append(contentsOf: matchPattern(#""[^"]+"\s*(?=:)"#, in: text, type: .property))
-        
-        // String values
-        tokens.append(contentsOf: matchPattern(#":\s*"[^"]*""#, in: text, type: .string))
+        // All strings (simple pattern - covers keys and values)
+        tokens.append(contentsOf: matchPattern(#"\"[^\"\n]*\""#, in: text, type: .string))
         
         // Numbers
-        tokens.append(contentsOf: matchPattern(#":\s*-?\d+\.?\d*"#, in: text, type: .number))
+        tokens.append(contentsOf: matchPattern(#"-?\b\d+\.?\d*\b"#, in: text, type: .number))
         
         // Booleans and null
         tokens.append(contentsOf: matchPattern(#"\b(true|false|null)\b"#, in: text, type: .keyword))
@@ -367,8 +366,8 @@ class SyntaxHighlighter {
         // Comments
         tokens.append(contentsOf: matchPattern(#"#.*$"#, in: text, type: .comment))
         
-        // Keys
-        tokens.append(contentsOf: matchPattern(#"^[\s-]*[a-zA-Z_][a-zA-Z0-9_]*(?=\s*:)"#, in: text, type: .property))
+        // Keys (simple pattern without lookahead)
+        tokens.append(contentsOf: matchPattern(#"^\s*[a-zA-Z_][a-zA-Z0-9_]*:"#, in: text, type: .property))
         
         // Strings
         tokens.append(contentsOf: matchPattern(#""[^"]*""#, in: text, type: .string))
@@ -390,24 +389,23 @@ class SyntaxHighlighter {
         // Headings
         tokens.append(contentsOf: matchPattern(#"^#{1,6}\s+.+$"#, in: text, type: .heading))
         
-        // Bold
-        tokens.append(contentsOf: matchPattern(#"\*\*[^*]+\*\*"#, in: text, type: .emphasis))
-        tokens.append(contentsOf: matchPattern(#"__[^_]+__"#, in: text, type: .emphasis))
+        // Bold (simplified)
+        tokens.append(contentsOf: matchPattern(#"\*\*[^*\n]+\*\*"#, in: text, type: .emphasis))
+        tokens.append(contentsOf: matchPattern(#"__[^_\n]+__"#, in: text, type: .emphasis))
         
-        // Italic
-        tokens.append(contentsOf: matchPattern(#"\*[^*]+\*"#, in: text, type: .emphasis))
-        tokens.append(contentsOf: matchPattern(#"_[^_]+_"#, in: text, type: .emphasis))
+        // Italic (simplified)
+        tokens.append(contentsOf: matchPattern(#"\*[^*\n]+\*"#, in: text, type: .emphasis))
+        tokens.append(contentsOf: matchPattern(#"_[^_\n]+_"#, in: text, type: .emphasis))
         
-        // Code blocks
-        tokens.append(contentsOf: matchPattern(#"```[\s\S]*?```"#, in: text, type: .codeBlock))
-        tokens.append(contentsOf: matchPattern(#"`[^`]+`"#, in: text, type: .codeBlock))
+        // Inline code
+        tokens.append(contentsOf: matchPattern(#"`[^`\n]+`"#, in: text, type: .codeBlock))
         
         // Links
-        tokens.append(contentsOf: matchPattern(#"\[([^\]]+)\]\([^\)]+\)"#, in: text, type: .link))
+        tokens.append(contentsOf: matchPattern(#"\[[^\]]+\]\([^\)]+\)"#, in: text, type: .link))
         
         // Lists
-        tokens.append(contentsOf: matchPattern(#"^[\s]*[-*+]\s"#, in: text, type: .punctuation))
-        tokens.append(contentsOf: matchPattern(#"^[\s]*\d+\.\s"#, in: text, type: .punctuation))
+        tokens.append(contentsOf: matchPattern(#"^\s*[-*+]\s"#, in: text, type: .punctuation))
+        tokens.append(contentsOf: matchPattern(#"^\s*\d+\.\s"#, in: text, type: .punctuation))
         
         return tokens
     }

@@ -14,6 +14,8 @@ struct CodeEditorView: View {
     @Environment(\.colorScheme) private var colorScheme
     
     @State private var lineCount: Int = 1
+    @State private var scrollOffset: CGFloat = 0
+    @State private var contentHeight: CGFloat = 0
     
     private var theme: SyntaxTheme {
         colorScheme == .dark ? .dark : .light
@@ -21,10 +23,12 @@ struct CodeEditorView: View {
     
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
-            // Line numbers
+            // Line numbers - synchronized with text view scroll
             LineNumbersView(
                 lineCount: lineCount,
-                theme: theme
+                theme: theme,
+                scrollOffset: scrollOffset,
+                contentHeight: contentHeight
             )
             .frame(width: 50)
             .accessibilityIdentifier("lineNumbers")
@@ -39,6 +43,10 @@ struct CodeEditorView: View {
                 theme: theme,
                 onLineCountChange: { count in
                     lineCount = count
+                },
+                onScrollChange: { offset, height in
+                    scrollOffset = offset
+                    contentHeight = height
                 }
             )
             .accessibilityIdentifier("codeEditor")
@@ -49,6 +57,10 @@ struct CodeEditorView: View {
                 theme: theme,
                 onLineCountChange: { count in
                     lineCount = count
+                },
+                onScrollChange: { offset, height in
+                    scrollOffset = offset
+                    contentHeight = height
                 }
             )
             .accessibilityIdentifier("codeEditor")
@@ -69,23 +81,35 @@ struct CodeEditorView: View {
     }
 }
 
-/// Line numbers view
+/// Line numbers view - synchronized with text view scroll
 struct LineNumbersView: View {
     let lineCount: Int
     let theme: SyntaxTheme
+    let scrollOffset: CGFloat
+    let contentHeight: CGFloat
+    
+    private let lineHeight: CGFloat = 21
+    private let topPadding: CGFloat = 0
     
     var body: some View {
-        VStack(alignment: .trailing, spacing: 0) {
-            ForEach(1...max(1, lineCount), id: \.self) { line in
-                Text("\(line)")
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundColor(theme.lineNumber)
-                    .frame(height: 21) // Match line height
-                    .padding(.horizontal, 8)
+        GeometryReader { geometry in
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .trailing, spacing: 0) {
+                    ForEach(1...max(1, lineCount), id: \.self) { line in
+                        Text("\(line)")
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundColor(theme.lineNumber)
+                            .frame(height: lineHeight)
+                            .padding(.horizontal, 8)
+                    }
+                }
+                .padding(.top, topPadding)
+                .background(theme.background.opacity(0.5))
             }
-            Spacer()
+            .scrollDisabled(true)
+            .offset(y: -scrollOffset)
         }
-        .padding(.top, 8)
+        .clipped()
         .background(theme.background.opacity(0.5))
     }
 }
@@ -99,6 +123,7 @@ struct MacOSTextEditor: NSViewRepresentable {
     let fileType: SupportedFileType
     let theme: SyntaxTheme
     let onLineCountChange: (Int) -> Void
+    let onScrollChange: (CGFloat, CGFloat) -> Void
     
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSTextView.scrollableTextView()
@@ -121,11 +146,14 @@ struct MacOSTextEditor: NSViewRepresentable {
         textView.isAutomaticTextReplacementEnabled = false
         textView.isAutomaticSpellingCorrectionEnabled = false
         
-        // Configure text container
+        // Configure text container for proper line height
         textView.textContainer?.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         textView.textContainer?.widthTracksTextView = true
         textView.isHorizontallyResizable = false
         textView.isVerticallyResizable = true
+        
+        // Remove default padding to align with line numbers
+        textView.textContainerInset = NSSize(width: 0, height: 0)
         
         // Set initial text
         textView.string = text
@@ -137,6 +165,15 @@ struct MacOSTextEditor: NSViewRepresentable {
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
         scrollView.backgroundColor = NSColor(theme.background)
+        
+        // Observe scroll changes
+        scrollView.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            context.coordinator,
+            selector: #selector(Coordinator.scrollViewDidScroll(_:)),
+            name: NSView.boundsDidChangeNotification,
+            object: scrollView.contentView
+        )
         
         return scrollView
     }
@@ -158,6 +195,11 @@ struct MacOSTextEditor: NSViewRepresentable {
         context.coordinator.fileType = fileType
         context.coordinator.theme = theme
         context.coordinator.applySyntaxHighlighting(to: textView)
+        
+        // Report current scroll position
+        let scrollOffset = scrollView.contentView.bounds.origin.y
+        let contentHeight = textView.frame.height
+        onScrollChange(scrollOffset, contentHeight)
     }
     
     func makeCoordinator() -> Coordinator {
@@ -174,6 +216,16 @@ struct MacOSTextEditor: NSViewRepresentable {
             self.parent = parent
             self.fileType = parent.fileType
             self.theme = parent.theme
+        }
+        
+        @objc func scrollViewDidScroll(_ notification: Notification) {
+            guard let clipView = notification.object as? NSClipView,
+                  let scrollView = clipView.superview as? NSScrollView,
+                  let textView = scrollView.documentView as? NSTextView else { return }
+            
+            let scrollOffset = clipView.bounds.origin.y
+            let contentHeight = textView.frame.height
+            parent.onScrollChange(scrollOffset, contentHeight)
         }
         
         func textDidChange(_ notification: Notification) {
@@ -231,6 +283,7 @@ struct iOSTextEditor: UIViewRepresentable {
     let fileType: SupportedFileType
     let theme: SyntaxTheme
     let onLineCountChange: (Int) -> Void
+    let onScrollChange: (CGFloat, CGFloat) -> Void
     
     func makeUIView(context: Context) -> UITextView {
         let textView = UITextView()
@@ -245,6 +298,7 @@ struct iOSTextEditor: UIViewRepresentable {
         textView.smartQuotesType = .no
         textView.smartDashesType = .no
         textView.keyboardType = .asciiCapable
+        textView.textContainerInset = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
         textView.text = text
         
         // Apply syntax highlighting
@@ -266,6 +320,9 @@ struct iOSTextEditor: UIViewRepresentable {
         context.coordinator.fileType = fileType
         context.coordinator.theme = theme
         context.coordinator.applySyntaxHighlighting(to: textView)
+        
+        // Report scroll position
+        onScrollChange(textView.contentOffset.y, textView.contentSize.height)
     }
     
     func makeCoordinator() -> Coordinator {
@@ -282,6 +339,11 @@ struct iOSTextEditor: UIViewRepresentable {
             self.parent = parent
             self.fileType = parent.fileType
             self.theme = parent.theme
+        }
+        
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            guard let textView = scrollView as? UITextView else { return }
+            parent.onScrollChange(textView.contentOffset.y, textView.contentSize.height)
         }
         
         func textViewDidChange(_ textView: UITextView) {

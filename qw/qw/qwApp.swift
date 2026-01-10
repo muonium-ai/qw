@@ -10,6 +10,8 @@ import UniformTypeIdentifiers
 
 @main
 struct qwApp: App {
+    @FocusedValue(\.searchState) private var searchState
+    
     var body: some Scene {
         // Document-based scene for file editing
         DocumentGroup(newDocument: TextDocument()) { file in
@@ -23,8 +25,40 @@ struct qwApp: App {
         }
         #if os(macOS)
         .commands {
-            // File menu customizations
-            CommandGroup(after: .newItem) {
+            // File menu customizations - Save As via export
+            CommandGroup(after: .saveItem) {
+                Button("Export As...") {
+                    NotificationCenter.default.post(name: .exportDocument, object: nil)
+                }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+            }
+            
+            // Find menu
+            CommandGroup(replacing: .textEditing) {
+                Button("Find...") {
+                    searchState?.isVisible = true
+                    searchState?.showReplace = false
+                }
+                .keyboardShortcut("f", modifiers: .command)
+                
+                Button("Find and Replace...") {
+                    searchState?.isVisible = true
+                    searchState?.showReplace = true
+                }
+                .keyboardShortcut("h", modifiers: .command)
+                
+                Button("Find Next") {
+                    searchState?.findNext()
+                }
+                .keyboardShortcut("g", modifiers: .command)
+                .disabled(searchState?.matches.isEmpty ?? true)
+                
+                Button("Find Previous") {
+                    searchState?.findPrevious()
+                }
+                .keyboardShortcut("g", modifiers: [.command, .shift])
+                .disabled(searchState?.matches.isEmpty ?? true)
+                
                 Divider()
             }
             
@@ -57,6 +91,11 @@ struct qwApp: App {
         }
         #endif
     }
+}
+
+// MARK: - Notifications
+extension Notification.Name {
+    static let exportDocument = Notification.Name("exportDocument")
 }
 
 // MARK: - Settings View

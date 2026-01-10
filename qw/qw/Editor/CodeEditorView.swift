@@ -158,6 +158,10 @@ struct MacOSTextEditor: NSViewRepresentable {
         // Set initial text
         textView.string = text
         
+        // Report initial line count
+        let lineCount = text.components(separatedBy: "\n").count
+        onLineCountChange(lineCount)
+        
         // Apply syntax highlighting
         context.coordinator.applySyntaxHighlighting(to: textView)
         
@@ -196,10 +200,14 @@ struct MacOSTextEditor: NSViewRepresentable {
         context.coordinator.theme = theme
         context.coordinator.applySyntaxHighlighting(to: textView)
         
-        // Report current scroll position
+        // Report current scroll position and line count
         let scrollOffset = scrollView.contentView.bounds.origin.y
         let contentHeight = textView.frame.height
         onScrollChange(scrollOffset, contentHeight)
+        
+        // Always report line count when view updates (handles file load)
+        let lineCount = textView.string.components(separatedBy: "\n").count
+        onLineCountChange(lineCount)
     }
     
     func makeCoordinator() -> Coordinator {
@@ -301,6 +309,10 @@ struct iOSTextEditor: UIViewRepresentable {
         textView.textContainerInset = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
         textView.text = text
         
+        // Report initial line count
+        let lineCount = text.components(separatedBy: "\n").count
+        onLineCountChange(lineCount)
+        
         // Apply syntax highlighting
         context.coordinator.applySyntaxHighlighting(to: textView)
         
@@ -321,8 +333,12 @@ struct iOSTextEditor: UIViewRepresentable {
         context.coordinator.theme = theme
         context.coordinator.applySyntaxHighlighting(to: textView)
         
-        // Report scroll position
+        // Report scroll position and line count
         onScrollChange(textView.contentOffset.y, textView.contentSize.height)
+        
+        // Always report line count when view updates (handles file load)
+        let lineCount = (textView.text ?? "").components(separatedBy: "\n").count
+        onLineCountChange(lineCount)
     }
     
     func makeCoordinator() -> Coordinator {

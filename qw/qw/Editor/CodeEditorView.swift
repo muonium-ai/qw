@@ -194,8 +194,14 @@ struct MacOSTextEditor: NSViewRepresentable {
         textView.isHorizontallyResizable = false
         textView.isVerticallyResizable = true
         
-        // Add small inset for better scrolling at document end
+        // Small horizontal inset only - we handle bottom scroll padding differently
         textView.textContainerInset = NSSize(width: 4, height: 4)
+        
+        // Add extra height to the text container to allow scrolling past last lines
+        // This is done by increasing the container's height tracking
+        if let textContainer = textView.textContainer {
+            textContainer.heightTracksTextView = false
+        }
         
         // Store font info in coordinator
         context.coordinator.currentFont = font
@@ -216,6 +222,9 @@ struct MacOSTextEditor: NSViewRepresentable {
         scrollView.backgroundColor = NSColor(theme.background)
         scrollView.drawsBackground = true
         scrollView.contentView.backgroundColor = NSColor(theme.background)
+        
+        // Add content insets to allow scrolling past the last lines
+        scrollView.contentInsets = NSEdgeInsets(top: 0, left: 0, bottom: 400, right: 0)
         
         // Observe scroll changes
         scrollView.contentView.postsBoundsChangedNotifications = true

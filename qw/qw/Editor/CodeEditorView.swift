@@ -17,9 +17,34 @@ struct CodeEditorView: View {
     @State private var lineCount: Int = 1
     @State private var scrollOffset: CGFloat = 0
     @State private var contentHeight: CGFloat = 0
+    @State private var actualLineHeight: CGFloat = 0
     
     private var theme: SyntaxTheme {
         settings.syntaxTheme(for: colorScheme)
+    }
+
+    private var themeKey: String {
+        let scheme = colorScheme == .dark ? "dark" : "light"
+        return "\(settings.themeName)-\(scheme)"
+    }
+
+    private var editorLineHeight: CGFloat {
+        #if os(macOS)
+        // Use same font logic as MacOSTextEditor.getFont()
+        let fontName = settings.selectedFont.fontName
+        let font: NSFont
+        if fontName == "Menlo" || fontName.isEmpty {
+            font = NSFont.monospacedSystemFont(ofSize: settings.fontSize, weight: .regular)
+        } else {
+            font = NSFont(name: fontName, size: settings.fontSize)
+                ?? NSFont.monospacedSystemFont(ofSize: settings.fontSize, weight: .regular)
+        }
+        let baseLineHeight = NSLayoutManager().defaultLineHeight(for: font)
+        return baseLineHeight * CGFloat(settings.lineHeight)
+        #else
+        let font = settings.uiFont()
+        return font.lineHeight * CGFloat(settings.lineHeight)
+        #endif
     }
     
     var body: some View {
@@ -31,7 +56,9 @@ struct CodeEditorView: View {
                     theme: theme,
                     scrollOffset: scrollOffset,
                     contentHeight: contentHeight,
-                    fontSize: settings.fontSize
+                    fontSize: settings.fontSize,
+                    fontName: settings.selectedFont.fontName,
+                    lineHeight: actualLineHeight > 0 ? actualLineHeight : editorLineHeight
                 )
                 .frame(width: 50)
                 .accessibilityIdentifier("lineNumbers")
@@ -44,36 +71,46 @@ struct CodeEditorView: View {
             MacOSTextEditor(
                 text: $text,
                 fileType: fileType,
+                themeName: themeKey,
                 theme: theme,
                 fontSize: settings.fontSize,
+                lineHeightMultiple: settings.lineHeight,
                 fontName: settings.selectedFont.fontName,
                 onLineCountChange: { count in
                     lineCount = count
                 },
-                onScrollChange: { offset, height in
+                onScrollChange: { offset, height, lineHeight in
                     scrollOffset = offset
                     contentHeight = height
+                    if lineHeight > 0 {
+                        actualLineHeight = lineHeight
+                    }
                 }
             )
             .accessibilityIdentifier("codeEditor")
-            .id("\(settings.fontSize)-\(settings.fontName)-\(settings.themeName)")
+            .id("\(settings.fontSize)-\(settings.fontName)-\(themeKey)")
             #else
             iOSTextEditor(
                 text: $text,
                 fileType: fileType,
+                themeName: themeKey,
                 theme: theme,
                 fontSize: settings.fontSize,
+                lineHeightMultiple: settings.lineHeight,
                 fontName: settings.selectedFont.fontName,
                 onLineCountChange: { count in
                     lineCount = count
                 },
-                onScrollChange: { offset, height in
+                onScrollChange: { offset, height, lineHeight in
                     scrollOffset = offset
                     contentHeight = height
+                    if lineHeight > 0 {
+                        actualLineHeight = lineHeight
+                    }
                 }
             )
             .accessibilityIdentifier("codeEditor")
-            .id("\(settings.fontSize)-\(settings.fontName)-\(settings.themeName)")
+            .id("\(settings.fontSize)-\(settings.fontName)-\(themeKey)")
             #endif
         }
         .background(theme.background)
@@ -98,9 +135,19 @@ struct LineNumbersView: View {
     let scrollOffset: CGFloat
     let contentHeight: CGFloat
     let fontSize: Double
+    let fontName: String
+    let lineHeight: CGFloat
     
-    private var lineHeight: CGFloat {
-        CGFloat(fontSize * 1.5)
+    // Match the text view's top inset
+    private var topInset: CGFloat {
+        max(4, CGFloat(fontSize * 1.5))
+    }
+
+    private var lineNumberFont: Font {
+        if fontName.isEmpty {
+            return .system(size: fontSize, design: .monospaced)
+        }
+        return .custom(fontName, size: fontSize)
     }
     
     var body: some View {
@@ -114,14 +161,21 @@ struct LineNumbersView: View {
             let visibleHeight = size.height
             let totalLines = max(1, lineCount)
             
+            // Account for the text container inset when calculating visible lines
+            let adjustedScrollOffset = max(0, scrollOffset - topInset)
+            
             // Calculate which lines are visible
-            let firstVisibleLine = max(1, Int(scrollOffset / lineHeight))
+            let firstVisibleLine = max(1, Int(adjustedScrollOffset / lineHeight) + 1)
             let visibleLineCount = Int(visibleHeight / lineHeight) + 3 // Extra buffer
             let lastVisibleLine = min(totalLines, firstVisibleLine + visibleLineCount)
             
+            // Guard against invalid ranges
+            guard firstVisibleLine <= lastVisibleLine else { return }
+            
             // Draw each visible line number
-            for lineNumber in max(1, firstVisibleLine)...lastVisibleLine {
-                let yPosition = CGFloat(lineNumber - 1) * lineHeight - scrollOffset
+            for lineNumber in firstVisibleLine...lastVisibleLine {
+                // Position includes the top inset offset
+                let yPosition = topInset + CGFloat(lineNumber - 1) * lineHeight - scrollOffset
                 
                 // Skip if outside visible area
                 if yPosition < -lineHeight || yPosition > visibleHeight {
@@ -129,7 +183,7 @@ struct LineNumbersView: View {
                 }
                 
                 let text = Text("\(lineNumber)")
-                    .font(.system(size: fontSize, design: .monospaced))
+                    .font(lineNumberFont)
                     .foregroundColor(theme.lineNumber)
                 
                 // Right-align the line number
@@ -151,11 +205,18 @@ import AppKit
 struct MacOSTextEditor: NSViewRepresentable {
     @Binding var text: String
     let fileType: SupportedFileType
+    let themeName: String
     let theme: SyntaxTheme
     let fontSize: Double
+    let lineHeightMultiple: Double
     let fontName: String
     let onLineCountChange: (Int) -> Void
-    let onScrollChange: (CGFloat, CGFloat) -> Void
+    let onScrollChange: (CGFloat, CGFloat, CGFloat) -> Void  // offset, height, lineHeight
+    
+    private func textContainerInset() -> NSSize {
+        let insetHeight = max(4, CGFloat(fontSize * 1.5))
+        return NSSize(width: 4, height: insetHeight)
+    }
     
     private func getFont() -> NSFont {
         if fontName == "Menlo" || fontName.isEmpty {
@@ -163,6 +224,22 @@ struct MacOSTextEditor: NSViewRepresentable {
         }
         return NSFont(name: fontName, size: fontSize)
             ?? NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+    }
+
+    private func paragraphStyle(for font: NSFont) -> NSParagraphStyle {
+        let style = NSMutableParagraphStyle()
+        let baseLineHeight = NSLayoutManager().defaultLineHeight(for: font)
+        let lineHeight = baseLineHeight * CGFloat(lineHeightMultiple)
+        style.minimumLineHeight = lineHeight
+        style.maximumLineHeight = lineHeight
+        return style
+    }
+
+    private func applyParagraphStyle(_ style: NSParagraphStyle, to textView: NSTextView) {
+        textView.defaultParagraphStyle = style
+        var typingAttributes = textView.typingAttributes
+        typingAttributes[.paragraphStyle] = style
+        textView.typingAttributes = typingAttributes
     }
     
     func makeNSView(context: Context) -> NSScrollView {
@@ -187,6 +264,11 @@ struct MacOSTextEditor: NSViewRepresentable {
         textView.isAutomaticDashSubstitutionEnabled = false
         textView.isAutomaticTextReplacementEnabled = false
         textView.isAutomaticSpellingCorrectionEnabled = false
+        // Prevent blank regions during fast scrolling.
+        textView.layoutManager?.allowsNonContiguousLayout = false
+
+        let paragraphStyle = paragraphStyle(for: font)
+        applyParagraphStyle(paragraphStyle, to: textView)
         
         // Configure text container for proper line height
         textView.textContainer?.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
@@ -194,8 +276,7 @@ struct MacOSTextEditor: NSViewRepresentable {
         textView.isHorizontallyResizable = false
         textView.isVerticallyResizable = true
         
-        // Small horizontal inset only - we handle bottom scroll padding differently
-        textView.textContainerInset = NSSize(width: 4, height: 4)
+        textView.textContainerInset = textContainerInset()
         
         // Add extra height to the text container to allow scrolling past last lines
         // This is done by increasing the container's height tracking
@@ -223,8 +304,7 @@ struct MacOSTextEditor: NSViewRepresentable {
         scrollView.drawsBackground = true
         scrollView.contentView.backgroundColor = NSColor(theme.background)
         
-        // Add content insets to allow scrolling past the last lines
-        scrollView.contentInsets = NSEdgeInsets(top: 0, left: 0, bottom: 400, right: 0)
+        scrollView.contentInsets = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
         
         // Observe scroll changes
         scrollView.contentView.postsBoundsChangedNotifications = true
@@ -240,36 +320,67 @@ struct MacOSTextEditor: NSViewRepresentable {
     
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? NSTextView else { return }
+        context.coordinator.parent = self
         
         let font = getFont()
+        var needsHighlight = false
         
         if textView.string != text {
             let selectedRanges = textView.selectedRanges
             textView.string = text
             textView.selectedRanges = selectedRanges
+            needsHighlight = true
         }
         
         // Update font if changed
         if context.coordinator.currentFont != font {
             context.coordinator.currentFont = font
             textView.font = font
+            needsHighlight = true
+        }
+
+        if context.coordinator.lineHeightMultiple != lineHeightMultiple {
+            context.coordinator.lineHeightMultiple = lineHeightMultiple
+            needsHighlight = true
         }
         
         // Update colors
         textView.backgroundColor = NSColor(theme.background)
-        textView.textColor = NSColor(theme.plain)
         textView.insertionPointColor = NSColor(theme.plain)
         scrollView.backgroundColor = NSColor(theme.background)
         scrollView.contentView.backgroundColor = NSColor(theme.background)
         
-        context.coordinator.fileType = fileType
-        context.coordinator.theme = theme
-        context.coordinator.applySyntaxHighlighting(to: textView)
+        if context.coordinator.fileType != fileType {
+            context.coordinator.fileType = fileType
+            needsHighlight = true
+        }
+        
+        if context.coordinator.themeName != themeName {
+            context.coordinator.themeName = themeName
+            context.coordinator.theme = theme
+            needsHighlight = true
+        } else {
+            context.coordinator.theme = theme
+        }
+        
+        let currentInset = textView.textContainerInset
+        let desiredInset = textContainerInset()
+        if currentInset.width != desiredInset.width || currentInset.height != desiredInset.height {
+            textView.textContainerInset = desiredInset
+        }
+
+        let paragraphStyle = paragraphStyle(for: font)
+        applyParagraphStyle(paragraphStyle, to: textView)
+        
+        if needsHighlight {
+            context.coordinator.applySyntaxHighlighting(to: textView)
+        }
         
         // Report current scroll position and line count
         let scrollOffset = scrollView.contentView.bounds.origin.y
         let contentHeight = textView.frame.height
-        onScrollChange(scrollOffset, contentHeight)
+        let lineHeight = context.coordinator.getActualLineHeight(from: textView)
+        onScrollChange(scrollOffset, contentHeight, lineHeight)
         
         // Always report line count when view updates (handles file load)
         let lineCount = textView.string.components(separatedBy: "\n").count
@@ -284,14 +395,18 @@ struct MacOSTextEditor: NSViewRepresentable {
         var parent: MacOSTextEditor
         var fileType: SupportedFileType
         var theme: SyntaxTheme
+        var themeName: String
         var currentFont: NSFont
+        var lineHeightMultiple: Double
         private var isUpdating = false
         
         init(_ parent: MacOSTextEditor) {
             self.parent = parent
             self.fileType = parent.fileType
             self.theme = parent.theme
+            self.themeName = parent.themeName
             self.currentFont = parent.getFont()
+            self.lineHeightMultiple = parent.lineHeightMultiple
         }
         
         @objc func scrollViewDidScroll(_ notification: Notification) {
@@ -301,7 +416,25 @@ struct MacOSTextEditor: NSViewRepresentable {
             
             let scrollOffset = clipView.bounds.origin.y
             let contentHeight = textView.frame.height
-            parent.onScrollChange(scrollOffset, contentHeight)
+            let lineHeight = getActualLineHeight(from: textView)
+            parent.onScrollChange(scrollOffset, contentHeight, lineHeight)
+        }
+        
+        func getActualLineHeight(from textView: NSTextView) -> CGFloat {
+            guard let layoutManager = textView.layoutManager,
+                  let textContainer = textView.textContainer,
+                  textView.string.count > 0 else {
+                return 0
+            }
+            
+            // Get the line height from the first line's used rect
+            let glyphRange = layoutManager.glyphRange(for: textContainer)
+            if glyphRange.length > 0 {
+                var lineRange = NSRange()
+                let lineRect = layoutManager.lineFragmentRect(forGlyphAt: 0, effectiveRange: &lineRange)
+                return lineRect.height
+            }
+            return 0
         }
         
         func textDidChange(_ notification: Notification) {
@@ -327,10 +460,12 @@ struct MacOSTextEditor: NSViewRepresentable {
             if text.utf16.count > maxHighlightSize {
                 // Just apply plain styling for large files
                 let fullRange = NSRange(location: 0, length: text.utf16.count)
+                let paragraphStyle = parent.paragraphStyle(for: currentFont)
                 textView.textStorage?.beginEditing()
                 textView.textStorage?.setAttributes([
                     .font: currentFont,
-                    .foregroundColor: NSColor(theme.plain)
+                    .foregroundColor: NSColor(theme.plain),
+                    .paragraphStyle: paragraphStyle
                 ], range: fullRange)
                 textView.textStorage?.endEditing()
                 return
@@ -346,9 +481,11 @@ struct MacOSTextEditor: NSViewRepresentable {
             
             // Reset to plain style with current font
             let fullRange = NSRange(location: 0, length: text.utf16.count)
+            let paragraphStyle = parent.paragraphStyle(for: currentFont)
             textView.textStorage?.setAttributes([
                 .font: currentFont,
-                .foregroundColor: NSColor(theme.plain)
+                .foregroundColor: NSColor(theme.plain),
+                .paragraphStyle: paragraphStyle
             ], range: fullRange)
             
             // Apply highlighted tokens using tokens directly
@@ -377,11 +514,13 @@ import UIKit
 struct iOSTextEditor: UIViewRepresentable {
     @Binding var text: String
     let fileType: SupportedFileType
+    let themeName: String
     let theme: SyntaxTheme
     let fontSize: Double
+    let lineHeightMultiple: Double
     let fontName: String
     let onLineCountChange: (Int) -> Void
-    let onScrollChange: (CGFloat, CGFloat) -> Void
+    let onScrollChange: (CGFloat, CGFloat, CGFloat) -> Void  // offset, height, lineHeight
     
     private func getFont() -> UIFont {
         if fontName == "Menlo" || fontName.isEmpty {
@@ -389,6 +528,21 @@ struct iOSTextEditor: UIViewRepresentable {
         }
         return UIFont(name: fontName, size: fontSize)
             ?? UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+    }
+
+    private func paragraphStyle(for font: UIFont) -> NSParagraphStyle {
+        let style = NSMutableParagraphStyle()
+        let lineHeight = font.lineHeight * CGFloat(lineHeightMultiple)
+        style.minimumLineHeight = lineHeight
+        style.maximumLineHeight = lineHeight
+        return style
+    }
+
+    private func applyParagraphStyle(_ style: NSParagraphStyle, to textView: UITextView, font: UIFont) {
+        var typingAttributes = textView.typingAttributes
+        typingAttributes[.paragraphStyle] = style
+        typingAttributes[.font] = font
+        textView.typingAttributes = typingAttributes
     }
     
     func makeUIView(context: Context) -> UITextView {
@@ -408,6 +562,9 @@ struct iOSTextEditor: UIViewRepresentable {
         textView.keyboardType = .asciiCapable
         textView.textContainerInset = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
         textView.text = text
+
+        let paragraphStyle = paragraphStyle(for: font)
+        applyParagraphStyle(paragraphStyle, to: textView, font: font)
         
         context.coordinator.currentFont = font
         
@@ -422,29 +579,54 @@ struct iOSTextEditor: UIViewRepresentable {
     }
     
     func updateUIView(_ textView: UITextView, context: Context) {
+        context.coordinator.parent = self
         let font = getFont()
+        var needsHighlight = false
         
         if textView.text != text {
             let selectedRange = textView.selectedRange
             textView.text = text
             textView.selectedRange = selectedRange
+            needsHighlight = true
         }
         
         // Update font if changed
         if context.coordinator.currentFont != font {
             context.coordinator.currentFont = font
             textView.font = font
+            needsHighlight = true
+        }
+
+        if context.coordinator.lineHeightMultiple != lineHeightMultiple {
+            context.coordinator.lineHeightMultiple = lineHeightMultiple
+            needsHighlight = true
         }
         
         textView.backgroundColor = UIColor(theme.background)
-        textView.textColor = UIColor(theme.plain)
         
-        context.coordinator.fileType = fileType
-        context.coordinator.theme = theme
-        context.coordinator.applySyntaxHighlighting(to: textView)
+        if context.coordinator.fileType != fileType {
+            context.coordinator.fileType = fileType
+            needsHighlight = true
+        }
+        
+        if context.coordinator.themeName != themeName {
+            context.coordinator.themeName = themeName
+            context.coordinator.theme = theme
+            needsHighlight = true
+        } else {
+            context.coordinator.theme = theme
+        }
+        
+        if needsHighlight {
+            context.coordinator.applySyntaxHighlighting(to: textView)
+        }
+
+        let paragraphStyle = paragraphStyle(for: font)
+        applyParagraphStyle(paragraphStyle, to: textView, font: font)
         
         // Report scroll position and line count
-        onScrollChange(textView.contentOffset.y, textView.contentSize.height)
+        let lineHeight = context.coordinator.getActualLineHeight(from: textView)
+        onScrollChange(textView.contentOffset.y, textView.contentSize.height, lineHeight)
         
         // Always report line count when view updates (handles file load)
         let lineCount = (textView.text ?? "").components(separatedBy: "\n").count
@@ -459,19 +641,29 @@ struct iOSTextEditor: UIViewRepresentable {
         var parent: iOSTextEditor
         var fileType: SupportedFileType
         var theme: SyntaxTheme
+        var themeName: String
         var currentFont: UIFont
+        var lineHeightMultiple: Double
         private var isUpdating = false
         
         init(_ parent: iOSTextEditor) {
             self.parent = parent
             self.fileType = parent.fileType
             self.theme = parent.theme
+            self.themeName = parent.themeName
             self.currentFont = parent.getFont()
+            self.lineHeightMultiple = parent.lineHeightMultiple
         }
         
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
             guard let textView = scrollView as? UITextView else { return }
-            parent.onScrollChange(textView.contentOffset.y, textView.contentSize.height)
+            let lineHeight = getActualLineHeight(from: textView)
+            parent.onScrollChange(textView.contentOffset.y, textView.contentSize.height, lineHeight)
+        }
+        
+        func getActualLineHeight(from textView: UITextView) -> CGFloat {
+            guard let font = textView.font else { return 0 }
+            return font.lineHeight * CGFloat(lineHeightMultiple)
         }
         
         func textViewDidChange(_ textView: UITextView) {
@@ -494,9 +686,11 @@ struct iOSTextEditor: UIViewRepresentable {
             // Skip syntax highlighting for very large files (> 100KB) to prevent hang/crash
             let maxHighlightSize = 100_000
             if text.utf16.count > maxHighlightSize {
+                let paragraphStyle = parent.paragraphStyle(for: currentFont)
                 let attributedText = NSMutableAttributedString(string: text, attributes: [
                     .font: currentFont,
-                    .foregroundColor: UIColor(theme.plain)
+                    .foregroundColor: UIColor(theme.plain),
+                    .paragraphStyle: paragraphStyle
                 ])
                 let selectedRange = textView.selectedRange
                 textView.attributedText = attributedText
@@ -508,9 +702,11 @@ struct iOSTextEditor: UIViewRepresentable {
             
             let selectedRange = textView.selectedRange
             
+            let paragraphStyle = parent.paragraphStyle(for: currentFont)
             let attributedText = NSMutableAttributedString(string: text, attributes: [
                 .font: currentFont,
-                .foregroundColor: UIColor(theme.plain)
+                .foregroundColor: UIColor(theme.plain),
+                .paragraphStyle: paragraphStyle
             ])
             
             // Apply syntax highlighting using tokens directly

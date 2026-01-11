@@ -97,6 +97,7 @@ clean:
 	@echo "$(YELLOW)Cleaning build artifacts...$(NC)"
 	@rm -rf $(BUILD_DIR)
 	@rm -rf ~/Library/Developer/Xcode/DerivedData/$(PROJECT_NAME)-*
+	@rm -rf qw-export/.build
 	@xcodebuild clean \
 		-project $(XCODEPROJ) \
 		-scheme $(SCHEME) \

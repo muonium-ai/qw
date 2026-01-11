@@ -91,7 +91,7 @@ struct CodeEditorView: View {
     }
 }
 
-/// Line numbers view - synchronized with text view scroll
+/// Line numbers view - synchronized with text view scroll using Canvas for efficient rendering
 struct LineNumbersView: View {
     let lineCount: Int
     let theme: SyntaxTheme
@@ -102,28 +102,45 @@ struct LineNumbersView: View {
     private var lineHeight: CGFloat {
         CGFloat(fontSize * 1.5)
     }
-    private let topPadding: CGFloat = 0
     
     var body: some View {
-        GeometryReader { geometry in
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .trailing, spacing: 0) {
-                    ForEach(1...max(1, lineCount), id: \.self) { line in
-                        Text("\(line)")
-                            .font(.system(size: fontSize, design: .monospaced))
-                            .foregroundColor(theme.lineNumber)
-                            .frame(height: lineHeight)
-                            .padding(.horizontal, 8)
-                    }
+        Canvas { context, size in
+            // Fill background
+            context.fill(
+                Path(CGRect(origin: .zero, size: size)),
+                with: .color(theme.background.opacity(0.5))
+            )
+            
+            let visibleHeight = size.height
+            let totalLines = max(1, lineCount)
+            
+            // Calculate which lines are visible
+            let firstVisibleLine = max(1, Int(scrollOffset / lineHeight))
+            let visibleLineCount = Int(visibleHeight / lineHeight) + 3 // Extra buffer
+            let lastVisibleLine = min(totalLines, firstVisibleLine + visibleLineCount)
+            
+            // Draw each visible line number
+            for lineNumber in max(1, firstVisibleLine)...lastVisibleLine {
+                let yPosition = CGFloat(lineNumber - 1) * lineHeight - scrollOffset
+                
+                // Skip if outside visible area
+                if yPosition < -lineHeight || yPosition > visibleHeight {
+                    continue
                 }
-                .padding(.top, topPadding)
-                .background(theme.background.opacity(0.5))
+                
+                let text = Text("\(lineNumber)")
+                    .font(.system(size: fontSize, design: .monospaced))
+                    .foregroundColor(theme.lineNumber)
+                
+                // Right-align the line number
+                let resolved = context.resolve(text)
+                let textSize = resolved.measure(in: CGSize(width: size.width, height: lineHeight))
+                let xPosition = size.width - textSize.width - 8
+                
+                context.draw(resolved, at: CGPoint(x: xPosition, y: yPosition + (lineHeight - textSize.height) / 2), anchor: .topLeading)
             }
-            .scrollDisabled(true)
-            .offset(y: -scrollOffset)
         }
         .clipped()
-        .background(theme.background.opacity(0.5))
     }
 }
 
@@ -177,8 +194,8 @@ struct MacOSTextEditor: NSViewRepresentable {
         textView.isHorizontallyResizable = false
         textView.isVerticallyResizable = true
         
-        // Remove default padding to align with line numbers
-        textView.textContainerInset = NSSize(width: 0, height: 0)
+        // Add small inset for better scrolling at document end
+        textView.textContainerInset = NSSize(width: 4, height: 4)
         
         // Store font info in coordinator
         context.coordinator.currentFont = font
@@ -197,6 +214,8 @@ struct MacOSTextEditor: NSViewRepresentable {
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
         scrollView.backgroundColor = NSColor(theme.background)
+        scrollView.drawsBackground = true
+        scrollView.contentView.backgroundColor = NSColor(theme.background)
         
         // Observe scroll changes
         scrollView.contentView.postsBoundsChangedNotifications = true
@@ -231,6 +250,8 @@ struct MacOSTextEditor: NSViewRepresentable {
         textView.backgroundColor = NSColor(theme.background)
         textView.textColor = NSColor(theme.plain)
         textView.insertionPointColor = NSColor(theme.plain)
+        scrollView.backgroundColor = NSColor(theme.background)
+        scrollView.contentView.backgroundColor = NSColor(theme.background)
         
         context.coordinator.fileType = fileType
         context.coordinator.theme = theme
@@ -291,10 +312,28 @@ struct MacOSTextEditor: NSViewRepresentable {
             defer { isUpdating = false }
             
             let text = textView.string
+            
+            // Skip syntax highlighting for very large files (> 100KB) to prevent hang/crash
+            let maxHighlightSize = 100_000
+            if text.utf16.count > maxHighlightSize {
+                // Just apply plain styling for large files
+                let fullRange = NSRange(location: 0, length: text.utf16.count)
+                textView.textStorage?.beginEditing()
+                textView.textStorage?.setAttributes([
+                    .font: currentFont,
+                    .foregroundColor: NSColor(theme.plain)
+                ], range: fullRange)
+                textView.textStorage?.endEditing()
+                return
+            }
+            
             let highlighter = SyntaxHighlighter(fileType: fileType, theme: theme)
             
             // Store selection
             let selectedRanges = textView.selectedRanges
+            
+            // Batch all edits to prevent repeated layout passes
+            textView.textStorage?.beginEditing()
             
             // Reset to plain style with current font
             let fullRange = NSRange(location: 0, length: text.utf16.count)
@@ -312,6 +351,8 @@ struct MacOSTextEditor: NSViewRepresentable {
                     textView.textStorage?.addAttribute(.foregroundColor, value: NSColor(color), range: nsRange)
                 }
             }
+            
+            textView.textStorage?.endEditing()
             
             // Restore selection
             textView.selectedRanges = selectedRanges
@@ -440,6 +481,20 @@ struct iOSTextEditor: UIViewRepresentable {
             defer { isUpdating = false }
             
             let text = textView.text ?? ""
+            
+            // Skip syntax highlighting for very large files (> 100KB) to prevent hang/crash
+            let maxHighlightSize = 100_000
+            if text.utf16.count > maxHighlightSize {
+                let attributedText = NSMutableAttributedString(string: text, attributes: [
+                    .font: currentFont,
+                    .foregroundColor: UIColor(theme.plain)
+                ])
+                let selectedRange = textView.selectedRange
+                textView.attributedText = attributedText
+                textView.selectedRange = selectedRange
+                return
+            }
+            
             let highlighter = SyntaxHighlighter(fileType: fileType, theme: theme)
             
             let selectedRange = textView.selectedRange

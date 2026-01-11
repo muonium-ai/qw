@@ -68,6 +68,15 @@ class DocumentExporter {
             ?? NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
     }
     
+    // MARK: - Color Helper
+    
+    /// Safely convert SwiftUI Color to NSColor for use in attributed strings
+    private func nsColor(from color: Color) -> NSColor {
+        // Use NSColor directly from the Color
+        // This is safer than NSColor(color) in some contexts
+        return NSColor(color).usingColorSpace(.sRGB) ?? NSColor.black
+    }
+    
     // MARK: - Create Attributed String
     
     private func createAttributedString() -> NSAttributedString {
@@ -81,6 +90,10 @@ class DocumentExporter {
         let lineCount = lines.count
         let maxLineDigits = String(lineCount).count
         
+        // Pre-compute colors to avoid repeated conversion
+        let plainColor = nsColor(from: theme.plain)
+        let lineNumberColor = nsColor(from: theme.lineNumber)
+        
         // Paragraph style for line spacing
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineSpacing = 4
@@ -91,8 +104,8 @@ class DocumentExporter {
                 let lineNumber = String(format: "%\(maxLineDigits)d  ", index + 1)
                 let lineNumberAttrs: [NSAttributedString.Key: Any] = [
                     .font: font,
-                    .foregroundColor: NSColor(theme.lineNumber),
-                    .paragraphStyle: paragraphStyle
+                    .foregroundColor: lineNumberColor,
+                    .paragraphStyle: paragraphStyle.copy()
                 ]
                 result.append(NSAttributedString(string: lineNumber, attributes: lineNumberAttrs))
             }
@@ -104,8 +117,8 @@ class DocumentExporter {
                 // No tokens, use plain text
                 let attrs: [NSAttributedString.Key: Any] = [
                     .font: font,
-                    .foregroundColor: NSColor(theme.plain),
-                    .paragraphStyle: paragraphStyle
+                    .foregroundColor: plainColor,
+                    .paragraphStyle: paragraphStyle.copy()
                 ]
                 result.append(NSAttributedString(string: line, attributes: attrs))
             } else {
@@ -118,19 +131,19 @@ class DocumentExporter {
                         let gap = String(line[lastEnd..<token.range.lowerBound])
                         let attrs: [NSAttributedString.Key: Any] = [
                             .font: font,
-                            .foregroundColor: NSColor(theme.plain),
-                            .paragraphStyle: paragraphStyle
+                            .foregroundColor: plainColor,
+                            .paragraphStyle: paragraphStyle.copy()
                         ]
                         result.append(NSAttributedString(string: gap, attributes: attrs))
                     }
                     
                     // Add token
                     let tokenText = String(line[token.range])
-                    let color = theme.color(for: token.type)
+                    let tokenColor = nsColor(from: theme.color(for: token.type))
                     let attrs: [NSAttributedString.Key: Any] = [
                         .font: font,
-                        .foregroundColor: NSColor(color),
-                        .paragraphStyle: paragraphStyle
+                        .foregroundColor: tokenColor,
+                        .paragraphStyle: paragraphStyle.copy()
                     ]
                     result.append(NSAttributedString(string: tokenText, attributes: attrs))
                     
@@ -142,8 +155,8 @@ class DocumentExporter {
                     let remainder = String(line[lastEnd...])
                     let attrs: [NSAttributedString.Key: Any] = [
                         .font: font,
-                        .foregroundColor: NSColor(theme.plain),
-                        .paragraphStyle: paragraphStyle
+                        .foregroundColor: plainColor,
+                        .paragraphStyle: paragraphStyle.copy()
                     ]
                     result.append(NSAttributedString(string: remainder, attributes: attrs))
                 }
@@ -196,73 +209,15 @@ class DocumentExporter {
         let pageWidth: CGFloat = 612
         let pageHeight: CGFloat = 792
         let margin: CGFloat = 36
-        let contentWidth = pageWidth - (margin * 2)
-        let contentHeight = pageHeight - (margin * 2)
         
-        // Calculate total content size
-        let textStorage = NSTextStorage(attributedString: attributedString)
-        let layoutManager = NSLayoutManager()
-        textStorage.addLayoutManager(layoutManager)
+        // Generate PDF data and write to file
+        let pdfData = generatePDFData(attributedString: attributedString, pageWidth: pageWidth, pageHeight: pageHeight, margin: margin)
         
-        let textContainer = NSTextContainer(size: NSSize(width: contentWidth, height: CGFloat.greatestFiniteMagnitude))
-        textContainer.lineFragmentPadding = 0
-        layoutManager.addTextContainer(textContainer)
-        
-        // Force layout
-        layoutManager.ensureLayout(for: textContainer)
-        
-        // Get total text height
-        let usedRect = layoutManager.usedRect(for: textContainer)
-        
-        // Calculate number of pages
-        let totalPages = max(1, Int(ceil(usedRect.height / contentHeight)))
-        
-        // Create PDF context
-        var pdfData = Data()
-        let consumer = CGDataConsumer(data: pdfData as! CFMutableData)!
-        var mediaBox = CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight)
-        
-        guard let pdfContext = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else {
+        if pdfData.isEmpty {
             throw ExportError.pdfCreationFailed
         }
         
-        // Draw each page
-        for pageIndex in 0..<totalPages {
-            pdfContext.beginPDFPage(nil)
-            
-            // Fill background
-            pdfContext.setFillColor(NSColor(theme.background).cgColor)
-            pdfContext.fill(CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight))
-            
-            // Create graphics context for this page
-            let nsGraphicsContext = NSGraphicsContext(cgContext: pdfContext, flipped: false)
-            NSGraphicsContext.saveGraphicsState()
-            NSGraphicsContext.current = nsGraphicsContext
-            
-            // Calculate text range for this page
-            let yOffset = CGFloat(pageIndex) * contentHeight
-            let visibleRect = NSRect(x: 0, y: yOffset, width: contentWidth, height: contentHeight)
-            let glyphRange = layoutManager.glyphRange(forBoundingRect: visibleRect, in: textContainer)
-            
-            // Transform for this page
-            let transform = NSAffineTransform()
-            transform.translateX(by: margin, yBy: pageHeight - margin)
-            transform.scaleX(by: 1.0, yBy: -1.0)
-            transform.translateX(by: 0, yBy: -yOffset)
-            transform.concat()
-            
-            // Draw the text
-            layoutManager.drawBackground(forGlyphRange: glyphRange, at: .zero)
-            layoutManager.drawGlyphs(forGlyphRange: glyphRange, at: .zero)
-            
-            NSGraphicsContext.restoreGraphicsState()
-            pdfContext.endPDFPage()
-        }
-        
-        pdfContext.closePDF()
-        
-        // Write using proper PDF data extraction
-        try generatePDFData(attributedString: attributedString, pageWidth: pageWidth, pageHeight: pageHeight, margin: margin).write(to: url)
+        try pdfData.write(to: url)
     }
     
     private func generatePDFData(attributedString: NSAttributedString, pageWidth: CGFloat, pageHeight: CGFloat, margin: CGFloat) -> Data {
@@ -407,13 +362,26 @@ class DocumentExporter {
         savePanel.nameFieldLabel = "File Name:"
         savePanel.nameFieldStringValue = "\(defaultName).pdf"
         
-        savePanel.begin { [weak self] response in
+        // Capture self strongly to keep exporter alive until export completes
+        savePanel.begin { response in
+            Swift.print("[PDF Export] Save panel response: \(response == .OK ? "OK" : "Cancelled")")
             if response == .OK, let url = savePanel.url {
+                Swift.print("[PDF Export] Target URL: \(url.path)")
                 do {
-                    try self?.exportToPDF(to: url)
-                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                    try self.exportToPDF(to: url)
+                    // Verify file was created
+                    if FileManager.default.fileExists(atPath: url.path) {
+                        let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+                        let size = attrs?[.size] as? Int ?? 0
+                        Swift.print("[PDF Export] SUCCESS - File created: \(url.path), size: \(size) bytes")
+                        NSWorkspace.shared.activateFileViewerSelecting([url])
+                    } else {
+                        Swift.print("[PDF Export] ERROR - File was not created at: \(url.path)")
+                        self.showError("PDF file was not created. Please check permissions.")
+                    }
                 } catch {
-                    self?.showError("Failed to export PDF: \(error.localizedDescription)")
+                    Swift.print("[PDF Export] ERROR: \(error)")
+                    self.showError("Failed to export PDF: \(error.localizedDescription)")
                 }
             }
         }
@@ -429,13 +397,26 @@ class DocumentExporter {
         savePanel.nameFieldLabel = "File Name:"
         savePanel.nameFieldStringValue = "\(defaultName).png"
         
-        savePanel.begin { [weak self] response in
+        // Capture self strongly to keep exporter alive until export completes
+        savePanel.begin { response in
+            Swift.print("[PNG Export] Save panel response: \(response == .OK ? "OK" : "Cancelled")")
             if response == .OK, let url = savePanel.url {
+                Swift.print("[PNG Export] Target URL: \(url.path)")
                 do {
-                    try self?.exportToPNG(to: url)
-                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                    try self.exportToPNG(to: url)
+                    // Verify file was created
+                    if FileManager.default.fileExists(atPath: url.path) {
+                        let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+                        let size = attrs?[.size] as? Int ?? 0
+                        Swift.print("[PNG Export] SUCCESS - File created: \(url.path), size: \(size) bytes")
+                        NSWorkspace.shared.activateFileViewerSelecting([url])
+                    } else {
+                        Swift.print("[PNG Export] ERROR - File was not created at: \(url.path)")
+                        self.showError("PNG file was not created. Please check permissions.")
+                    }
                 } catch {
-                    self?.showError("Failed to export PNG: \(error.localizedDescription)")
+                    Swift.print("[PNG Export] ERROR: \(error)")
+                    self.showError("Failed to export PNG: \(error.localizedDescription)")
                 }
             }
         }

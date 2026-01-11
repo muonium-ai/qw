@@ -12,28 +12,32 @@ struct CodeEditorView: View {
     @Binding var text: String
     let fileType: SupportedFileType
     @Environment(\.colorScheme) private var colorScheme
+    @ObservedObject private var settings = EditorSettingsManager.shared
     
     @State private var lineCount: Int = 1
     @State private var scrollOffset: CGFloat = 0
     @State private var contentHeight: CGFloat = 0
     
     private var theme: SyntaxTheme {
-        colorScheme == .dark ? .dark : .light
+        settings.syntaxTheme(for: colorScheme)
     }
     
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
             // Line numbers - synchronized with text view scroll
-            LineNumbersView(
-                lineCount: lineCount,
-                theme: theme,
-                scrollOffset: scrollOffset,
-                contentHeight: contentHeight
-            )
-            .frame(width: 50)
-            .accessibilityIdentifier("lineNumbers")
-            
-            Divider()
+            if settings.showLineNumbers {
+                LineNumbersView(
+                    lineCount: lineCount,
+                    theme: theme,
+                    scrollOffset: scrollOffset,
+                    contentHeight: contentHeight,
+                    fontSize: settings.fontSize
+                )
+                .frame(width: 50)
+                .accessibilityIdentifier("lineNumbers")
+                
+                Divider()
+            }
             
             // Editor - no wrapping ScrollView since NSTextView has its own
             #if os(macOS)
@@ -41,6 +45,8 @@ struct CodeEditorView: View {
                 text: $text,
                 fileType: fileType,
                 theme: theme,
+                fontSize: settings.fontSize,
+                fontName: settings.selectedFont.fontName,
                 onLineCountChange: { count in
                     lineCount = count
                 },
@@ -50,11 +56,14 @@ struct CodeEditorView: View {
                 }
             )
             .accessibilityIdentifier("codeEditor")
+            .id("\(settings.fontSize)-\(settings.fontName)-\(settings.themeName)")
             #else
             iOSTextEditor(
                 text: $text,
                 fileType: fileType,
                 theme: theme,
+                fontSize: settings.fontSize,
+                fontName: settings.selectedFont.fontName,
                 onLineCountChange: { count in
                     lineCount = count
                 },
@@ -64,6 +73,7 @@ struct CodeEditorView: View {
                 }
             )
             .accessibilityIdentifier("codeEditor")
+            .id("\(settings.fontSize)-\(settings.fontName)-\(settings.themeName)")
             #endif
         }
         .background(theme.background)
@@ -87,8 +97,11 @@ struct LineNumbersView: View {
     let theme: SyntaxTheme
     let scrollOffset: CGFloat
     let contentHeight: CGFloat
+    let fontSize: Double
     
-    private let lineHeight: CGFloat = 21
+    private var lineHeight: CGFloat {
+        CGFloat(fontSize * 1.5)
+    }
     private let topPadding: CGFloat = 0
     
     var body: some View {
@@ -97,7 +110,7 @@ struct LineNumbersView: View {
                 VStack(alignment: .trailing, spacing: 0) {
                     ForEach(1...max(1, lineCount), id: \.self) { line in
                         Text("\(line)")
-                            .font(.system(.body, design: .monospaced))
+                            .font(.system(size: fontSize, design: .monospaced))
                             .foregroundColor(theme.lineNumber)
                             .frame(height: lineHeight)
                             .padding(.horizontal, 8)
@@ -122,8 +135,18 @@ struct MacOSTextEditor: NSViewRepresentable {
     @Binding var text: String
     let fileType: SupportedFileType
     let theme: SyntaxTheme
+    let fontSize: Double
+    let fontName: String
     let onLineCountChange: (Int) -> Void
     let onScrollChange: (CGFloat, CGFloat) -> Void
+    
+    private func getFont() -> NSFont {
+        if fontName == "Menlo" || fontName.isEmpty {
+            return NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        }
+        return NSFont(name: fontName, size: fontSize)
+            ?? NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+    }
     
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSTextView.scrollableTextView()
@@ -132,12 +155,14 @@ struct MacOSTextEditor: NSViewRepresentable {
             return scrollView
         }
         
+        let font = getFont()
+        
         textView.delegate = context.coordinator
         textView.isEditable = true
         textView.isSelectable = true
         textView.allowsUndo = true
         textView.isRichText = false
-        textView.font = NSFont.monospacedSystemFont(ofSize: 14, weight: .regular)
+        textView.font = font
         textView.backgroundColor = NSColor(theme.background)
         textView.textColor = NSColor(theme.plain)
         textView.insertionPointColor = NSColor(theme.plain)
@@ -154,6 +179,9 @@ struct MacOSTextEditor: NSViewRepresentable {
         
         // Remove default padding to align with line numbers
         textView.textContainerInset = NSSize(width: 0, height: 0)
+        
+        // Store font info in coordinator
+        context.coordinator.currentFont = font
         
         // Set initial text
         textView.string = text
@@ -185,10 +213,18 @@ struct MacOSTextEditor: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? NSTextView else { return }
         
+        let font = getFont()
+        
         if textView.string != text {
             let selectedRanges = textView.selectedRanges
             textView.string = text
             textView.selectedRanges = selectedRanges
+        }
+        
+        // Update font if changed
+        if context.coordinator.currentFont != font {
+            context.coordinator.currentFont = font
+            textView.font = font
         }
         
         // Update colors
@@ -218,12 +254,14 @@ struct MacOSTextEditor: NSViewRepresentable {
         var parent: MacOSTextEditor
         var fileType: SupportedFileType
         var theme: SyntaxTheme
+        var currentFont: NSFont
         private var isUpdating = false
         
         init(_ parent: MacOSTextEditor) {
             self.parent = parent
             self.fileType = parent.fileType
             self.theme = parent.theme
+            self.currentFont = parent.getFont()
         }
         
         @objc func scrollViewDidScroll(_ notification: Notification) {
@@ -258,10 +296,10 @@ struct MacOSTextEditor: NSViewRepresentable {
             // Store selection
             let selectedRanges = textView.selectedRanges
             
-            // Reset to plain style
+            // Reset to plain style with current font
             let fullRange = NSRange(location: 0, length: text.utf16.count)
             textView.textStorage?.setAttributes([
-                .font: NSFont.monospacedSystemFont(ofSize: 14, weight: .regular),
+                .font: currentFont,
                 .foregroundColor: NSColor(theme.plain)
             ], range: fullRange)
             
@@ -290,15 +328,27 @@ struct iOSTextEditor: UIViewRepresentable {
     @Binding var text: String
     let fileType: SupportedFileType
     let theme: SyntaxTheme
+    let fontSize: Double
+    let fontName: String
     let onLineCountChange: (Int) -> Void
     let onScrollChange: (CGFloat, CGFloat) -> Void
     
+    private func getFont() -> UIFont {
+        if fontName == "Menlo" || fontName.isEmpty {
+            return UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        }
+        return UIFont(name: fontName, size: fontSize)
+            ?? UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+    }
+    
     func makeUIView(context: Context) -> UITextView {
         let textView = UITextView()
+        let font = getFont()
+        
         textView.delegate = context.coordinator
         textView.isEditable = true
         textView.isSelectable = true
-        textView.font = UIFont.monospacedSystemFont(ofSize: 14, weight: .regular)
+        textView.font = font
         textView.backgroundColor = UIColor(theme.background)
         textView.textColor = UIColor(theme.plain)
         textView.autocapitalizationType = .none
@@ -308,6 +358,8 @@ struct iOSTextEditor: UIViewRepresentable {
         textView.keyboardType = .asciiCapable
         textView.textContainerInset = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
         textView.text = text
+        
+        context.coordinator.currentFont = font
         
         // Report initial line count
         let lineCount = text.components(separatedBy: "\n").count
@@ -320,10 +372,18 @@ struct iOSTextEditor: UIViewRepresentable {
     }
     
     func updateUIView(_ textView: UITextView, context: Context) {
+        let font = getFont()
+        
         if textView.text != text {
             let selectedRange = textView.selectedRange
             textView.text = text
             textView.selectedRange = selectedRange
+        }
+        
+        // Update font if changed
+        if context.coordinator.currentFont != font {
+            context.coordinator.currentFont = font
+            textView.font = font
         }
         
         textView.backgroundColor = UIColor(theme.background)
@@ -349,12 +409,14 @@ struct iOSTextEditor: UIViewRepresentable {
         var parent: iOSTextEditor
         var fileType: SupportedFileType
         var theme: SyntaxTheme
+        var currentFont: UIFont
         private var isUpdating = false
         
         init(_ parent: iOSTextEditor) {
             self.parent = parent
             self.fileType = parent.fileType
             self.theme = parent.theme
+            self.currentFont = parent.getFont()
         }
         
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
@@ -383,7 +445,7 @@ struct iOSTextEditor: UIViewRepresentable {
             let selectedRange = textView.selectedRange
             
             let attributedText = NSMutableAttributedString(string: text, attributes: [
-                .font: UIFont.monospacedSystemFont(ofSize: 14, weight: .regular),
+                .font: currentFont,
                 .foregroundColor: UIColor(theme.plain)
             ])
             

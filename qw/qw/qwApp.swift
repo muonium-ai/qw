@@ -94,19 +94,19 @@ struct qwApp: App {
             // Editor menu
             CommandMenu("Editor") {
                 Button("Increase Font Size") {
-                    // TODO: Implement font size increase
+                    EditorSettingsManager.shared.increaseFontSize()
                 }
                 .keyboardShortcut("+", modifiers: .command)
                 
                 Button("Decrease Font Size") {
-                    // TODO: Implement font size decrease
+                    EditorSettingsManager.shared.decreaseFontSize()
                 }
                 .keyboardShortcut("-", modifiers: .command)
                 
                 Divider()
                 
                 Button("Toggle Line Numbers") {
-                    // TODO: Implement line numbers toggle
+                    EditorSettingsManager.shared.showLineNumbers.toggle()
                 }
                 .keyboardShortcut("l", modifiers: [.command, .shift])
             }
@@ -129,55 +129,88 @@ extension Notification.Name {
 
 // MARK: - Settings View
 struct SettingsView: View {
-    @AppStorage("editorFontSize") private var fontSize: Double = 14
-    @AppStorage("showLineNumbers") private var showLineNumbers: Bool = true
-    @AppStorage("editorTheme") private var editorTheme: String = "system"
-    
     var body: some View {
         TabView {
-            GeneralSettingsView(
-                fontSize: $fontSize,
-                showLineNumbers: $showLineNumbers,
-                editorTheme: $editorTheme
-            )
-            .tabItem {
-                Label("General", systemImage: "gear")
-            }
+            AppearanceSettingsView()
+                .tabItem {
+                    Label("Appearance", systemImage: "paintbrush")
+                }
+            
+            FontSettingsView()
+                .tabItem {
+                    Label("Font", systemImage: "textformat")
+                }
             
             EditorSettingsView()
-            .tabItem {
-                Label("Editor", systemImage: "text.alignleft")
-            }
+                .tabItem {
+                    Label("Editor", systemImage: "text.alignleft")
+                }
         }
-        .frame(width: 450, height: 300)
+        .frame(width: 500, height: 350)
     }
 }
 
-struct GeneralSettingsView: View {
-    @Binding var fontSize: Double
-    @Binding var showLineNumbers: Bool
-    @Binding var editorTheme: String
+struct AppearanceSettingsView: View {
+    @ObservedObject private var settings = EditorSettingsManager.shared
     
     var body: some View {
         Form {
-            Section("Appearance") {
-                Picker("Theme", selection: $editorTheme) {
-                    Text("System").tag("system")
-                    Text("Light").tag("light")
-                    Text("Dark").tag("dark")
+            Section("Theme") {
+                Picker("Color Theme", selection: $settings.themeName) {
+                    ForEach(EditorThemeName.allCases) { theme in
+                        Text(theme.rawValue).tag(theme.rawValue)
+                    }
                 }
-                .pickerStyle(.segmented)
-            }
-            
-            Section("Font") {
-                HStack {
-                    Text("Size: \(Int(fontSize))")
-                    Slider(value: $fontSize, in: 10...24, step: 1)
-                }
+                .pickerStyle(.radioGroup)
             }
             
             Section("Display") {
-                Toggle("Show Line Numbers", isOn: $showLineNumbers)
+                Toggle("Show Line Numbers", isOn: $settings.showLineNumbers)
+            }
+        }
+        .padding()
+    }
+}
+
+struct FontSettingsView: View {
+    @ObservedObject private var settings = EditorSettingsManager.shared
+    
+    var body: some View {
+        Form {
+            Section("Font Family") {
+                Picker("Font", selection: $settings.fontName) {
+                    ForEach(ProgrammingFont.availableFonts) { font in
+                        Text(font.displayName).tag(font.rawValue)
+                    }
+                }
+                .pickerStyle(.radioGroup)
+            }
+            
+            Section("Font Size") {
+                HStack {
+                    Text("Size: \(Int(settings.fontSize)) pt")
+                        .frame(width: 80, alignment: .leading)
+                    Slider(value: $settings.fontSize, in: 8...32, step: 1)
+                    
+                    Button("-") {
+                        settings.decreaseFontSize()
+                    }
+                    .buttonStyle(.bordered)
+                    
+                    Button("+") {
+                        settings.increaseFontSize()
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+            
+            Section("Preview") {
+                Text("The quick brown fox jumps over the lazy dog")
+                    .font(.custom(settings.selectedFont.fontName, size: settings.fontSize))
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(Color.secondary.opacity(0.1))
+                    .cornerRadius(8)
             }
         }
         .padding()
@@ -185,21 +218,22 @@ struct GeneralSettingsView: View {
 }
 
 struct EditorSettingsView: View {
-    @AppStorage("tabWidth") private var tabWidth: Int = 4
-    @AppStorage("insertSpacesForTab") private var insertSpacesForTab: Bool = true
-    @AppStorage("autoIndent") private var autoIndent: Bool = true
-    @AppStorage("wordWrap") private var wordWrap: Bool = true
+    @ObservedObject private var settings = EditorSettingsManager.shared
     
     var body: some View {
         Form {
             Section("Indentation") {
-                Stepper("Tab Width: \(tabWidth)", value: $tabWidth, in: 2...8)
-                Toggle("Insert Spaces for Tabs", isOn: $insertSpacesForTab)
-                Toggle("Auto Indent", isOn: $autoIndent)
+                Stepper("Tab Width: \(settings.tabWidth)", value: $settings.tabWidth, in: 2...8)
+                Toggle("Insert Spaces for Tabs", isOn: $settings.insertSpacesForTab)
             }
             
             Section("Text") {
-                Toggle("Word Wrap", isOn: $wordWrap)
+                Toggle("Word Wrap", isOn: $settings.wordWrap)
+                
+                HStack {
+                    Text("Line Height: \(String(format: "%.1f", settings.lineHeight))")
+                    Slider(value: $settings.lineHeight, in: 1.0...2.0, step: 0.1)
+                }
             }
         }
         .padding()

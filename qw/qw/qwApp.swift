@@ -54,12 +54,30 @@ struct qwApp: App {
         }
         #if os(macOS)
         .commands {
-            // File menu customizations - Save As via export
+            // File menu - Print
+            CommandGroup(replacing: .printItem) {
+                Button("Print...") {
+                    NotificationCenter.default.post(name: .printDocument, object: nil)
+                }
+                .keyboardShortcut("p", modifiers: .command)
+            }
+            
+            // File menu - Export options
             CommandGroup(after: .saveItem) {
                 Button("Export As...") {
                     NotificationCenter.default.post(name: .exportDocument, object: nil)
                 }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
+                
+                Divider()
+                
+                Button("Export as PDF...") {
+                    NotificationCenter.default.post(name: .exportPDF, object: nil)
+                }
+                
+                Button("Export as PNG...") {
+                    NotificationCenter.default.post(name: .exportPNG, object: nil)
+                }
             }
             
             // Find menu
@@ -125,6 +143,9 @@ struct qwApp: App {
 // MARK: - Notifications
 extension Notification.Name {
     static let exportDocument = Notification.Name("exportDocument")
+    static let printDocument = Notification.Name("printDocument")
+    static let exportPDF = Notification.Name("exportPDF")
+    static let exportPNG = Notification.Name("exportPNG")
 }
 
 // MARK: - Settings View
@@ -161,7 +182,9 @@ struct AppearanceSettingsView: View {
                         Text(theme.rawValue).tag(theme.rawValue)
                     }
                 }
+                #if os(macOS)
                 .pickerStyle(.radioGroup)
+                #endif
             }
             
             Section("Display") {
@@ -183,7 +206,9 @@ struct FontSettingsView: View {
                         Text(font.displayName).tag(font.rawValue)
                     }
                 }
+                #if os(macOS)
                 .pickerStyle(.radioGroup)
+                #endif
             }
             
             Section("Font Size") {

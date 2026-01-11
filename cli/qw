@@ -9,11 +9,17 @@
 #   qw file.txt           # Open a file
 #   qw ~/Documents        # Open a folder
 #   qw file1.py file2.js  # Open multiple files
+#   qw --pdf file.py      # Export file to PDF
+#   qw --png file.py      # Export file to PNG
+#   qw --print file.py    # Print file
 #
 
 APP_NAME="qw"
 APP_PATH="/Applications/qw.app"
 BUNDLE_ID="muonium.qw"
+
+# Export tool paths
+QW_EXPORT_TOOL="$APP_PATH/Contents/MacOS/qw-export"
 
 # Check if app exists in /Applications
 if [ ! -d "$APP_PATH" ]; then
@@ -42,37 +48,198 @@ to_absolute_path() {
     fi
 }
 
-# If no arguments, just open the app
-if [ $# -eq 0 ]; then
-    open -a "$APP_PATH"
-    exit 0
-fi
+# Function to get file extension
+get_extension() {
+    local filename="$1"
+    echo "${filename##*.}"
+}
 
-# Process arguments
+# Function to change extension
+change_extension() {
+    local filename="$1"
+    local new_ext="$2"
+    echo "${filename%.*}.$new_ext"
+}
+
+# Function to export file using Swift script
+export_file() {
+    local input_file="$1"
+    local output_file="$2"
+    local format="$3"
+    local line_numbers="${4:-true}"
+    local theme="${5:-light}"
+    
+    # Create a temporary copy to avoid any potential file modification issues
+    local temp_input="/tmp/qw_temp_input_$$.txt"
+    cp "$input_file" "$temp_input"
+    
+    if [ "$format" = "pdf" ]; then
+        # Try enscript + ps2pdf for syntax-highlighted PDF (if installed)
+        if command -v enscript &> /dev/null && command -v ps2pdf &> /dev/null; then
+            local temp_ps="/tmp/qw_temp_$$.ps"
+            local enscript_opts="-1 --color=1"
+            
+            # Detect language for syntax highlighting
+            local ext="${input_file##*.}"
+            case "$ext" in
+                py) enscript_opts="$enscript_opts -E python" ;;
+                js|ts) enscript_opts="$enscript_opts -E javascript" ;;
+                swift) enscript_opts="$enscript_opts -E c" ;;
+                c|h) enscript_opts="$enscript_opts -E c" ;;
+                cpp|cc|cxx) enscript_opts="$enscript_opts -E cpp" ;;
+                java) enscript_opts="$enscript_opts -E java" ;;
+                sh|bash|zsh) enscript_opts="$enscript_opts -E bash" ;;
+                html|htm) enscript_opts="$enscript_opts -E html" ;;
+                css) enscript_opts="$enscript_opts -E css" ;;
+                *) ;; # No specific highlighting
+            esac
+            
+            if [ "$line_numbers" = "true" ]; then
+                enscript_opts="$enscript_opts -C"
+            fi
+            
+            enscript $enscript_opts -o "$temp_ps" "$temp_input" 2>/dev/null
+            if [ $? -eq 0 ] && [ -s "$temp_ps" ]; then
+                ps2pdf "$temp_ps" "$output_file" 2>/dev/null
+                rm -f "$temp_ps" "$temp_input"
+                if [ -s "$output_file" ]; then
+                    echo "Exported to: $output_file"
+                    return 0
+                fi
+            fi
+            rm -f "$temp_ps"
+        fi
+        
+        # Fallback: Use cupsfilter with plain text (always available on macOS)
+        cupsfilter -m "application/pdf" -o media=Letter "$temp_input" > "$output_file" 2>/dev/null
+        if [ $? -eq 0 ] && [ -s "$output_file" ]; then
+            rm -f "$temp_input"
+            echo "Exported to: $output_file (basic text format)"
+            return 0
+        fi
+        
+        rm -f "$temp_input"
+        echo "Error: Could not export to PDF."
+        echo "For syntax-highlighted PDFs, install enscript and ghostscript:"
+        echo "  brew install enscript ghostscript"
+        echo ""
+        echo "Or use the QW Editor app for full syntax-highlighted exports."
+        return 1
+        
+    elif [ "$format" = "png" ]; then
+        # Try pygmentize for syntax-highlighted PNG
+        if command -v pygmentize &> /dev/null; then
+            local style="monokai"
+            case "$theme" in
+                light) style="default" ;;
+                dark) style="monokai" ;;
+                monokai) style="monokai" ;;
+                dracula) style="dracula" ;;
+                *) style="monokai" ;;
+            esac
+            
+            local linenos_opt=""
+            if [ "$line_numbers" = "true" ]; then
+                linenos_opt=",linenos=true"
+            fi
+            
+            pygmentize -f png -O "font_name=Menlo,font_size=14,style=$style$linenos_opt" -o "$output_file" "$temp_input" 2>/dev/null
+            if [ $? -eq 0 ] && [ -s "$output_file" ]; then
+                rm -f "$temp_input"
+                echo "Exported to: $output_file"
+                return 0
+            fi
+        fi
+        
+        # Fallback: Create PDF first, then convert to PNG using sips
+        local temp_pdf="/tmp/qw_temp_$$.pdf"
+        
+        # Use cupsfilter for basic PDF
+        cupsfilter -m "application/pdf" -o media=Letter "$temp_input" > "$temp_pdf" 2>/dev/null
+        
+        if [ -f "$temp_pdf" ] && [ -s "$temp_pdf" ]; then
+            sips -s format png "$temp_pdf" --out "$output_file" 2>/dev/null
+            if [ $? -eq 0 ] && [ -s "$output_file" ]; then
+                rm -f "$temp_pdf" "$temp_input"
+                echo "Exported to: $output_file (basic text format)"
+                return 0
+            fi
+        fi
+        rm -f "$temp_pdf" "$temp_input"
+        
+        echo "Error: Could not export to PNG."
+        echo "For syntax-highlighted PNGs, install pygments:"
+        echo "  pip install pygments"
+        echo ""
+        echo "Or use the QW Editor app for full syntax-highlighted exports."
+        return 1
+    fi
+    
+    rm -f "$temp_input"
+}
+
+# Function to print file
+print_file() {
+    local input_file="$1"
+    local line_numbers="${2:-true}"
+    
+    # Use lpr for printing
+    if command -v enscript &> /dev/null; then
+        local enscript_opts="-1 -E --color=1"
+        if [ "$line_numbers" = "true" ]; then
+            enscript_opts="$enscript_opts -N"
+        fi
+        enscript $enscript_opts "$input_file" | lpr
+        echo "Sent to printer: $input_file"
+    else
+        # Fallback to lpr directly
+        lpr "$input_file"
+        echo "Sent to printer: $input_file"
+    fi
+}
+
+# Parse arguments
+EXPORT_FORMAT=""
+OUTPUT_FILE=""
+LINE_NUMBERS="true"
+THEME="light"
+WAIT_MODE=""
 FILES=()
-for arg in "$@"; do
-    case "$arg" in
+
+while [ $# -gt 0 ]; do
+    case "$1" in
         -h|--help)
             echo "QW Editor - Lightweight text editor"
             echo ""
             echo "Usage: qw [options] [file|folder...]"
             echo ""
             echo "Options:"
-            echo "  -h, --help     Show this help message"
-            echo "  -v, --version  Show version information"
-            echo "  -n, --new      Open a new empty window"
-            echo "  -w, --wait     Wait for the file to be closed"
+            echo "  -h, --help        Show this help message"
+            echo "  -v, --version     Show version information"
+            echo "  -n, --new         Open a new empty window"
+            echo "  -w, --wait        Wait for the file to be closed"
+            echo ""
+            echo "Export Options:"
+            echo "  --pdf [file]      Export file to PDF (syntax highlighted)"
+            echo "  --png [file]      Export file to PNG image"
+            echo "  --print [file]    Print file"
+            echo "  -o, --output FILE Specify output file path"
+            echo "  --no-line-numbers Exclude line numbers from export"
+            echo "  --theme THEME     Theme for export (light, dark, monokai, dracula)"
             echo ""
             echo "Examples:"
-            echo "  qw                    Open QW Editor"
-            echo "  qw .                  Open current folder"
-            echo "  qw file.txt           Open a file"
-            echo "  qw ~/Documents        Open a folder"
-            echo "  qw *.py               Open all Python files"
+            echo "  qw                         Open QW Editor"
+            echo "  qw .                       Open current folder"
+            echo "  qw file.txt                Open a file"
+            echo "  qw ~/Documents             Open a folder"
+            echo "  qw *.py                    Open all Python files"
+            echo "  qw --pdf script.py         Export to script.pdf"
+            echo "  qw --png code.js -o out.png Export to out.png"
+            echo "  qw --print README.md       Print the file"
             exit 0
             ;;
         -v|--version)
-            echo "qw version 1.0.0"
+            echo "qw version 1.1.0"
             exit 0
             ;;
         -n|--new)
@@ -82,18 +249,68 @@ for arg in "$@"; do
         -w|--wait)
             WAIT_MODE=1
             ;;
+        --pdf)
+            EXPORT_FORMAT="pdf"
+            ;;
+        --png)
+            EXPORT_FORMAT="png"
+            ;;
+        --print)
+            EXPORT_FORMAT="print"
+            ;;
+        -o|--output)
+            shift
+            OUTPUT_FILE="$1"
+            ;;
+        --no-line-numbers)
+            LINE_NUMBERS="false"
+            ;;
+        --theme)
+            shift
+            THEME="$1"
+            ;;
         *)
             # Check if file/folder exists
-            if [ -e "$arg" ]; then
-                FILES+=("$(to_absolute_path "$arg")")
+            if [ -e "$1" ]; then
+                FILES+=("$(to_absolute_path "$1")")
+            elif [ -n "$EXPORT_FORMAT" ]; then
+                # If in export mode and file doesn't exist, show error
+                echo "Error: '$1' does not exist."
+                exit 1
             else
-                echo "Warning: '$arg' does not exist, skipping."
+                echo "Warning: '$1' does not exist, skipping."
             fi
             ;;
     esac
+    shift
 done
 
-# Open files/folders
+# Handle export modes
+if [ -n "$EXPORT_FORMAT" ]; then
+    if [ ${#FILES[@]} -eq 0 ]; then
+        echo "Error: No input file specified for export."
+        echo "Usage: qw --$EXPORT_FORMAT <file>"
+        exit 1
+    fi
+    
+    for input_file in "${FILES[@]}"; do
+        if [ "$EXPORT_FORMAT" = "print" ]; then
+            print_file "$input_file" "$LINE_NUMBERS"
+        else
+            # Determine output file
+            if [ -n "$OUTPUT_FILE" ]; then
+                output="$OUTPUT_FILE"
+            else
+                output="$(change_extension "$input_file" "$EXPORT_FORMAT")"
+            fi
+            
+            export_file "$input_file" "$output" "$EXPORT_FORMAT" "$LINE_NUMBERS" "$THEME"
+        fi
+    done
+    exit 0
+fi
+
+# Open files/folders in the app
 if [ ${#FILES[@]} -gt 0 ]; then
     if [ "$WAIT_MODE" = "1" ]; then
         open -a "$APP_PATH" -W "${FILES[@]}"

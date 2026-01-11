@@ -75,6 +75,15 @@ struct DocumentEditorView: View {
         .onReceive(NotificationCenter.default.publisher(for: .exportDocument)) { _ in
             exportDocument()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .printDocument)) { _ in
+            printDocument()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .exportPDF)) { _ in
+            exportAsPDF()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .exportPNG)) { _ in
+            exportAsPNG()
+        }
         #endif
         .focusedSceneValue(\.searchState, searchState)
     }
@@ -114,6 +123,49 @@ struct DocumentEditorView: View {
                 }
             }
         }
+    }
+    
+    private func printDocument() {
+        let settings = EditorSettingsManager.shared
+        let exporter = DocumentExporter(
+            text: document.text,
+            fileType: fileType,
+            theme: settings.syntaxTheme(for: .light), // Use light theme for printing
+            includeLineNumbers: settings.showLineNumbers,
+            fontSize: settings.fontSize,
+            fontName: settings.selectedFont.fontName
+        )
+        exporter.print()
+    }
+    
+    private func exportAsPDF() {
+        let settings = EditorSettingsManager.shared
+        let exporter = DocumentExporter(
+            text: document.text,
+            fileType: fileType,
+            theme: settings.syntaxTheme(for: .light), // Use light theme for PDF
+            includeLineNumbers: settings.showLineNumbers,
+            fontSize: settings.fontSize,
+            fontName: settings.selectedFont.fontName
+        )
+        
+        let defaultName = fileURL?.deletingPathExtension().lastPathComponent ?? "Untitled"
+        exporter.showPDFExportDialog(defaultName: defaultName)
+    }
+    
+    private func exportAsPNG() {
+        let settings = EditorSettingsManager.shared
+        let exporter = DocumentExporter(
+            text: document.text,
+            fileType: fileType,
+            theme: settings.syntaxTheme(for: .light), // Use light theme for PNG
+            includeLineNumbers: settings.showLineNumbers,
+            fontSize: settings.fontSize,
+            fontName: settings.selectedFont.fontName
+        )
+        
+        let defaultName = fileURL?.deletingPathExtension().lastPathComponent ?? "Untitled"
+        exporter.showPNGExportDialog(defaultName: defaultName)
     }
     #endif
 }

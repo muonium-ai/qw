@@ -1,0 +1,422 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "QW Editor Configuration",
+  "description": "Sample JSON configuration file for QW Editor testing. Demonstrates complex JSON structures with nested objects, arrays, and various data types.",
+  "version": "1.0.0",
+  "metadata": {
+    "author": "QW Editor Team",
+    "license": "MIT",
+    "repository": "https://github.com/muonium-ai/qw",
+    "createdAt": "2024-01-01T00:00:00Z",
+    "updatedAt": "2024-12-01T12:30:00Z"
+  },
+  "editor": {
+    "general": {
+      "autoSave": true,
+      "autoSaveDelay": 1000,
+      "showLineNumbers": true,
+      "showGutter": true,
+      "wordWrap": "on",
+      "tabSize": 4,
+      "insertSpaces": true,
+      "trimTrailingWhitespace": true,
+      "insertFinalNewline": true,
+      "rulers": [80, 120],
+      "scrollBeyondLastLine": false
+    },
+    "cursor": {
+      "style": "line",
+      "blinking": "smooth",
+      "smoothCaretAnimation": true,
+      "cursorSurroundingLines": 3
+    },
+    "minimap": {
+      "enabled": true,
+      "side": "right",
+      "showSlider": "mouseover",
+      "maxColumn": 120,
+      "renderCharacters": true
+    },
+    "find": {
+      "seedSearchStringFromSelection": true,
+      "autoFindInSelection": "multiline",
+      "addExtraSpaceOnTop": true
+    }
+  },
+  "themes": {
+    "current": "qw-dark",
+    "available": [
+      {
+        "id": "qw-dark",
+        "name": "QW Dark",
+        "type": "dark",
+        "colors": {
+          "editor.background": "#1e1e1e",
+          "editor.foreground": "#d4d4d4",
+          "editor.lineHighlightBackground": "#2d2d2d",
+          "editor.selectionBackground": "#264f78",
+          "editorCursor.foreground": "#ffffff",
+          "editorLineNumber.foreground": "#858585",
+          "editorLineNumber.activeForeground": "#c6c6c6"
+        },
+        "tokenColors": [
+          {
+            "name": "Comments",
+            "scope": ["comment", "punctuation.definition.comment"],
+            "settings": {
+              "foreground": "#6A9955",
+              "fontStyle": "italic"
+            }
+          },
+          {
+            "name": "Keywords",
+            "scope": ["keyword", "storage.type", "storage.modifier"],
+            "settings": {
+              "foreground": "#569CD6"
+            }
+          },
+          {
+            "name": "Strings",
+            "scope": ["string", "string.quoted"],
+            "settings": {
+              "foreground": "#CE9178"
+            }
+          },
+          {
+            "name": "Numbers",
+            "scope": ["constant.numeric"],
+            "settings": {
+              "foreground": "#B5CEA8"
+            }
+          },
+          {
+            "name": "Functions",
+            "scope": ["entity.name.function", "support.function"],
+            "settings": {
+              "foreground": "#DCDCAA"
+            }
+          },
+          {
+            "name": "Types",
+            "scope": ["entity.name.type", "support.type"],
+            "settings": {
+              "foreground": "#4EC9B0"
+            }
+          }
+        ]
+      },
+      {
+        "id": "qw-light",
+        "name": "QW Light",
+        "type": "light",
+        "colors": {
+          "editor.background": "#ffffff",
+          "editor.foreground": "#333333",
+          "editor.lineHighlightBackground": "#f5f5f5",
+          "editor.selectionBackground": "#add6ff",
+          "editorCursor.foreground": "#000000",
+          "editorLineNumber.foreground": "#999999",
+          "editorLineNumber.activeForeground": "#333333"
+        },
+        "tokenColors": [
+          {
+            "name": "Comments",
+            "scope": ["comment"],
+            "settings": {
+              "foreground": "#008000",
+              "fontStyle": "italic"
+            }
+          },
+          {
+            "name": "Keywords",
+            "scope": ["keyword"],
+            "settings": {
+              "foreground": "#0000FF"
+            }
+          },
+          {
+            "name": "Strings",
+            "scope": ["string"],
+            "settings": {
+              "foreground": "#A31515"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "fonts": {
+    "editor": {
+      "family": "SF Mono",
+      "fallbacks": ["Menlo", "Monaco", "Consolas", "monospace"],
+      "size": 14,
+      "lineHeight": 1.6,
+      "weight": 400,
+      "ligatures": true
+    },
+    "ui": {
+      "family": "SF Pro Text",
+      "fallbacks": ["-apple-system", "BlinkMacSystemFont", "sans-serif"],
+      "size": 13
+    }
+  },
+  "languages": {
+    "supported": [
+      {
+        "id": "swift",
+        "name": "Swift",
+        "extensions": [".swift"],
+        "aliases": ["Swift"],
+        "mimeTypes": ["text/x-swift"],
+        "configuration": {
+          "comments": {
+            "lineComment": "//",
+            "blockComment": ["/*", "*/"]
+          },
+          "brackets": [
+            ["{", "}"],
+            ["[", "]"],
+            ["(", ")"]
+          ],
+          "autoClosingPairs": [
+            { "open": "{", "close": "}" },
+            { "open": "[", "close": "]" },
+            { "open": "(", "close": ")" },
+            { "open": "\"", "close": "\"" },
+            { "open": "'", "close": "'" }
+          ]
+        }
+      },
+      {
+        "id": "python",
+        "name": "Python",
+        "extensions": [".py", ".pyw", ".pyi"],
+        "aliases": ["Python", "py"],
+        "mimeTypes": ["text/x-python"],
+        "configuration": {
+          "comments": {
+            "lineComment": "#"
+          },
+          "brackets": [
+            ["{", "}"],
+            ["[", "]"],
+            ["(", ")"]
+          ],
+          "indentationRules": {
+            "increaseIndentPattern": "^\\s*(?:def|class|if|elif|else|for|while|with|try|except|finally).*:\\s*$",
+            "decreaseIndentPattern": "^\\s*(?:elif|else|except|finally)\\b"
+          }
+        }
+      },
+      {
+        "id": "javascript",
+        "name": "JavaScript",
+        "extensions": [".js", ".mjs", ".cjs"],
+        "aliases": ["JavaScript", "js"],
+        "mimeTypes": ["text/javascript", "application/javascript"]
+      },
+      {
+        "id": "html",
+        "name": "HTML",
+        "extensions": [".html", ".htm"],
+        "aliases": ["HTML"],
+        "mimeTypes": ["text/html"]
+      },
+      {
+        "id": "css",
+        "name": "CSS",
+        "extensions": [".css"],
+        "aliases": ["CSS"],
+        "mimeTypes": ["text/css"]
+      },
+      {
+        "id": "json",
+        "name": "JSON",
+        "extensions": [".json", ".jsonc"],
+        "aliases": ["JSON"],
+        "mimeTypes": ["application/json"]
+      },
+      {
+        "id": "yaml",
+        "name": "YAML",
+        "extensions": [".yml", ".yaml"],
+        "aliases": ["YAML", "yml"],
+        "mimeTypes": ["text/yaml", "application/x-yaml"]
+      },
+      {
+        "id": "markdown",
+        "name": "Markdown",
+        "extensions": [".md", ".markdown"],
+        "aliases": ["Markdown", "md"],
+        "mimeTypes": ["text/markdown"]
+      }
+    ]
+  },
+  "export": {
+    "pdf": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "margins": {
+        "top": 72,
+        "right": 72,
+        "bottom": 72,
+        "left": 72
+      },
+      "showLineNumbers": true,
+      "syntaxHighlighting": true,
+      "headerTemplate": "<div style=\"font-size: 10px; text-align: center; width: 100%;\">{{title}}</div>",
+      "footerTemplate": "<div style=\"font-size: 10px; text-align: center; width: 100%;\">Page {{pageNumber}} of {{totalPages}}</div>",
+      "printBackground": true
+    },
+    "png": {
+      "scale": 2,
+      "backgroundColor": "#1e1e1e",
+      "padding": 32,
+      "showLineNumbers": true,
+      "syntaxHighlighting": true,
+      "maxWidth": 1920,
+      "fontFamily": "SF Mono",
+      "fontSize": 14,
+      "lineHeight": 1.6
+    },
+    "html": {
+      "embedStyles": true,
+      "syntaxHighlighting": true,
+      "showLineNumbers": true,
+      "theme": "qw-dark"
+    }
+  },
+  "keyboard": {
+    "shortcuts": [
+      {
+        "key": "cmd+s",
+        "command": "file.save",
+        "when": "editorFocus"
+      },
+      {
+        "key": "cmd+shift+s",
+        "command": "file.saveAs",
+        "when": "editorFocus"
+      },
+      {
+        "key": "cmd+p",
+        "command": "file.print",
+        "when": "editorFocus"
+      },
+      {
+        "key": "cmd+shift+e",
+        "command": "export.pdf",
+        "when": "editorFocus"
+      },
+      {
+        "key": "cmd+shift+p",
+        "command": "export.png",
+        "when": "editorFocus"
+      },
+      {
+        "key": "cmd+,",
+        "command": "preferences.open"
+      },
+      {
+        "key": "cmd+f",
+        "command": "edit.find",
+        "when": "editorFocus"
+      },
+      {
+        "key": "cmd+g",
+        "command": "edit.findNext",
+        "when": "editorFocus && findWidgetVisible"
+      },
+      {
+        "key": "cmd+shift+g",
+        "command": "edit.findPrevious",
+        "when": "editorFocus && findWidgetVisible"
+      },
+      {
+        "key": "cmd+h",
+        "command": "edit.replace",
+        "when": "editorFocus"
+      },
+      {
+        "key": "cmd+z",
+        "command": "edit.undo",
+        "when": "editorFocus"
+      },
+      {
+        "key": "cmd+shift+z",
+        "command": "edit.redo",
+        "when": "editorFocus"
+      }
+    ]
+  },
+  "plugins": {
+    "enabled": [
+      "syntax-highlighting",
+      "auto-complete",
+      "bracket-matching",
+      "indent-guides"
+    ],
+    "disabled": [
+      "spell-checker"
+    ],
+    "registry": [
+      {
+        "id": "syntax-highlighting",
+        "name": "Syntax Highlighting",
+        "version": "1.0.0",
+        "description": "Provides syntax highlighting for supported languages",
+        "author": "QW Editor Team",
+        "main": "./plugins/syntax-highlighting/index.js",
+        "activationEvents": ["onLanguage:*"]
+      },
+      {
+        "id": "auto-complete",
+        "name": "Auto Complete",
+        "version": "1.0.0",
+        "description": "Intelligent code completion",
+        "author": "QW Editor Team",
+        "main": "./plugins/auto-complete/index.js",
+        "activationEvents": ["onLanguage:*"]
+      }
+    ]
+  },
+  "telemetry": {
+    "enabled": false,
+    "level": "off",
+    "crashReports": false
+  },
+  "experimental": {
+    "features": {
+      "lspSupport": false,
+      "gitIntegration": false,
+      "remoteFiles": false,
+      "aiAssistant": false
+    }
+  },
+  "defaults": {
+    "openLastFile": true,
+    "restoreSession": true,
+    "showWelcome": true,
+    "updateChannel": "stable",
+    "checkForUpdates": true
+  },
+  "statistics": {
+    "totalFilesOpened": 1234,
+    "totalLinesSaved": 56789,
+    "totalExports": {
+      "pdf": 42,
+      "png": 28,
+      "html": 15
+    },
+    "languageUsage": {
+      "swift": 0.35,
+      "python": 0.25,
+      "javascript": 0.20,
+      "markdown": 0.10,
+      "json": 0.05,
+      "other": 0.05
+    },
+    "averageSessionDuration": 3600,
+    "lastSession": "2024-12-01T12:00:00Z"
+  }
+}

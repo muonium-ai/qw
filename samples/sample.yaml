@@ -1,0 +1,483 @@
+# Sample YAML Configuration for QW Editor Testing
+# A comprehensive example demonstrating YAML syntax highlighting
+# with complex structures, anchors, and multi-line strings.
+
+---
+# Document metadata
+metadata:
+  title: QW Editor Configuration
+  version: 1.0.0
+  description: |
+    This is a sample YAML configuration file for testing
+    QW Editor's syntax highlighting and export features.
+    
+    It includes various YAML constructs such as:
+    - Nested objects and arrays
+    - Anchors and aliases
+    - Multi-line strings
+    - Comments and special types
+  author: QW Editor Team
+  license: MIT
+  repository: https://github.com/muonium-ai/qw
+  created_at: 2024-01-01T00:00:00Z
+  updated_at: 2024-12-01T12:30:00Z
+  tags:
+    - text-editor
+    - macos
+    - ios
+    - swift
+    - syntax-highlighting
+
+# Application configuration
+application:
+  name: QW Editor
+  bundle_id: muonium.qw
+  platforms:
+    - name: macOS
+      min_version: "14.0"
+      architectures:
+        - arm64
+        - x86_64
+    - name: iOS
+      min_version: "17.0"
+      architectures:
+        - arm64
+    - name: iPadOS
+      min_version: "17.0"
+      architectures:
+        - arm64
+
+# Editor settings
+editor:
+  general: &editor_defaults
+    auto_save: true
+    auto_save_delay_ms: 1000
+    show_line_numbers: true
+    word_wrap: on
+    tab_size: 4
+    insert_spaces: true
+    trim_trailing_whitespace: true
+    insert_final_newline: true
+    
+  cursor:
+    style: line
+    blinking: smooth
+    animation_enabled: true
+    
+  scroll:
+    beyond_last_line: false
+    smooth_scrolling: true
+    fast_scroll_sensitivity: 5
+    
+  find_replace:
+    seed_from_selection: true
+    preserve_case: false
+    use_regex: false
+    wrap_around: true
+
+# Theme configuration
+themes:
+  current: qw-dark
+  
+  definitions:
+    - &dark_theme
+      id: qw-dark
+      name: QW Dark
+      type: dark
+      colors:
+        background: "#1e1e1e"
+        foreground: "#d4d4d4"
+        selection: "#264f78"
+        cursor: "#ffffff"
+        line_highlight: "#2d2d2d"
+        gutter:
+          background: "#1e1e1e"
+          foreground: "#858585"
+          active: "#c6c6c6"
+      syntax:
+        comment: &comment_style
+          color: "#6A9955"
+          style: italic
+        keyword:
+          color: "#569CD6"
+          style: normal
+        string:
+          color: "#CE9178"
+          style: normal
+        number:
+          color: "#B5CEA8"
+          style: normal
+        function:
+          color: "#DCDCAA"
+          style: normal
+        type:
+          color: "#4EC9B0"
+          style: normal
+        variable:
+          color: "#9CDCFE"
+          style: normal
+        operator:
+          color: "#D4D4D4"
+          style: normal
+          
+    - &light_theme
+      id: qw-light
+      name: QW Light
+      type: light
+      colors:
+        background: "#ffffff"
+        foreground: "#333333"
+        selection: "#add6ff"
+        cursor: "#000000"
+        line_highlight: "#f5f5f5"
+      syntax:
+        comment:
+          <<: *comment_style
+          color: "#008000"
+        keyword:
+          color: "#0000FF"
+          style: normal
+        string:
+          color: "#A31515"
+          style: normal
+
+# Font configuration
+fonts:
+  editor:
+    family: SF Mono
+    fallbacks:
+      - Menlo
+      - Monaco
+      - Consolas
+      - "Courier New"
+      - monospace
+    size: 14
+    line_height: 1.6
+    weight: 400
+    ligatures: true
+    
+  ui:
+    family: SF Pro Text
+    fallbacks:
+      - -apple-system
+      - BlinkMacSystemFont
+      - "Helvetica Neue"
+      - sans-serif
+    size: 13
+    weight: 400
+
+# Language support
+languages:
+  - id: swift
+    name: Swift
+    extensions:
+      - .swift
+    mime_types:
+      - text/x-swift
+    configuration:
+      comments:
+        line: "//"
+        block:
+          start: "/*"
+          end: "*/"
+      brackets:
+        - ["{", "}"]
+        - ["[", "]"]
+        - ["(", ")"]
+      auto_closing_pairs:
+        - {open: "{", close: "}"}
+        - {open: "[", close: "]"}
+        - {open: "(", close: ")"}
+        - {open: '"', close: '"'}
+        - {open: "'", close: "'"}
+        
+  - id: python
+    name: Python
+    extensions:
+      - .py
+      - .pyw
+      - .pyi
+    mime_types:
+      - text/x-python
+    configuration:
+      comments:
+        line: "#"
+      indentation:
+        increase_pattern: '^\s*(?:def|class|if|elif|else|for|while|with|try|except|finally).*:\s*$'
+        decrease_pattern: '^\s*(?:elif|else|except|finally)\b'
+        
+  - id: javascript
+    name: JavaScript
+    extensions:
+      - .js
+      - .mjs
+      - .cjs
+    mime_types:
+      - text/javascript
+      - application/javascript
+      
+  - id: markdown
+    name: Markdown
+    extensions:
+      - .md
+      - .markdown
+    mime_types:
+      - text/markdown
+      
+  - id: json
+    name: JSON
+    extensions:
+      - .json
+      - .jsonc
+    mime_types:
+      - application/json
+      
+  - id: yaml
+    name: YAML
+    extensions:
+      - .yml
+      - .yaml
+    mime_types:
+      - text/yaml
+      - application/x-yaml
+      
+  - id: html
+    name: HTML
+    extensions:
+      - .html
+      - .htm
+    mime_types:
+      - text/html
+      
+  - id: css
+    name: CSS
+    extensions:
+      - .css
+    mime_types:
+      - text/css
+
+# Export settings
+export:
+  pdf:
+    page_size: A4
+    orientation: portrait
+    margins:
+      top: 72
+      right: 72
+      bottom: 72
+      left: 72
+    show_line_numbers: true
+    syntax_highlighting: true
+    header:
+      enabled: true
+      template: "{{title}}"
+      font_size: 10
+    footer:
+      enabled: true
+      template: "Page {{page}} of {{pages}}"
+      font_size: 10
+    print_background: true
+    
+  png:
+    scale: 2
+    background_color: "#1e1e1e"
+    padding: 32
+    show_line_numbers: true
+    syntax_highlighting: true
+    max_width: 1920
+    font:
+      family: SF Mono
+      size: 14
+      line_height: 1.6
+
+# Keyboard shortcuts
+keyboard:
+  shortcuts:
+    # File operations
+    - key: Cmd+S
+      command: file.save
+      context: editorFocus
+    - key: Cmd+Shift+S
+      command: file.save_as
+      context: editorFocus
+    - key: Cmd+O
+      command: file.open
+    - key: Cmd+W
+      command: file.close
+      context: editorFocus
+      
+    # Edit operations
+    - key: Cmd+Z
+      command: edit.undo
+      context: editorFocus
+    - key: Cmd+Shift+Z
+      command: edit.redo
+      context: editorFocus
+    - key: Cmd+X
+      command: edit.cut
+      context: editorFocus
+    - key: Cmd+C
+      command: edit.copy
+      context: editorFocus
+    - key: Cmd+V
+      command: edit.paste
+      context: editorFocus
+    - key: Cmd+A
+      command: edit.select_all
+      context: editorFocus
+      
+    # Find operations
+    - key: Cmd+F
+      command: find.show
+      context: editorFocus
+    - key: Cmd+G
+      command: find.next
+      context: findVisible
+    - key: Cmd+Shift+G
+      command: find.previous
+      context: findVisible
+    - key: Cmd+H
+      command: find.replace
+      context: editorFocus
+      
+    # Export operations
+    - key: Cmd+P
+      command: file.print
+      context: editorFocus
+    - key: Cmd+Shift+E
+      command: export.pdf
+      context: editorFocus
+    - key: Cmd+Shift+P
+      command: export.png
+      context: editorFocus
+      
+    # View operations
+    - key: Cmd+=
+      command: view.zoom_in
+    - key: Cmd+-
+      command: view.zoom_out
+    - key: Cmd+0
+      command: view.zoom_reset
+
+# Feature flags
+features:
+  enabled:
+    - syntax_highlighting
+    - auto_complete
+    - bracket_matching
+    - indent_guides
+    - auto_indent
+    - code_folding
+    
+  disabled:
+    - spell_checker
+    - git_integration
+    
+  experimental:
+    lsp_support: false
+    ai_assistant: false
+    remote_files: false
+    collaboration: false
+
+# Logging configuration
+logging:
+  level: info  # debug, info, warning, error
+  outputs:
+    - type: console
+      format: "[{{timestamp}}] {{level}}: {{message}}"
+    - type: file
+      path: ~/Library/Logs/QW/qw.log
+      max_size_mb: 10
+      max_files: 5
+      format: json
+
+# Statistics tracking
+statistics:
+  enabled: true
+  anonymous: true
+  
+  metrics:
+    - files_opened
+    - lines_written
+    - exports_completed
+    - session_duration
+    - language_usage
+
+# Update configuration
+updates:
+  check_automatically: true
+  channel: stable  # stable, beta, nightly
+  check_interval_hours: 24
+  download_automatically: false
+
+# Multi-line string examples
+examples:
+  # Literal block scalar (preserves newlines)
+  literal_block: |
+    This is a literal block scalar.
+    Line breaks are preserved.
+    
+    Including blank lines.
+        And indentation.
+    
+  # Folded block scalar (folds newlines)
+  folded_block: >
+    This is a folded block scalar.
+    Newlines become spaces.
+    
+    But blank lines create paragraphs.
+    This continues the same paragraph.
+    
+  # Chomping indicators
+  keep_final_newline: |+
+    This block keeps the final newline
+    and any trailing blank lines.
+    
+    
+  strip_final_newline: |-
+    This block strips the final newline
+    and trailing blank lines.
+
+# Complex data types
+complex_types:
+  null_value: null
+  null_tilde: ~
+  boolean_true: true
+  boolean_false: false
+  boolean_yes: yes
+  boolean_no: no
+  integer: 42
+  float: 3.14159
+  scientific: 6.022e23
+  infinity: .inf
+  negative_infinity: -.inf
+  not_a_number: .nan
+  hexadecimal: 0xFF
+  octal: 0o755
+  date: 2024-12-01
+  datetime: 2024-12-01T12:30:00Z
+  
+# Anchors and aliases example
+defaults: &defaults
+  adapter: postgres
+  host: localhost
+  pool_size: 5
+
+development:
+  <<: *defaults
+  database: qw_development
+  
+test:
+  <<: *defaults
+  database: qw_test
+  pool_size: 1
+  
+production:
+  <<: *defaults
+  host: db.example.com
+  database: qw_production
+  pool_size: 25
+  ssl: true
+
+# End of configuration
+...

@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!--
+        Sample HTML Document for QW Editor Testing
+        A comprehensive example demonstrating HTML syntax highlighting.
+        
+        This document showcases:
+        - Semantic HTML5 elements
+        - Forms and input types
+        - Tables with accessibility
+        - Media elements
+        - SVG graphics
+        - Microdata and ARIA
+    -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="A sample HTML document for testing QW Editor's syntax highlighting and export features">
+    <meta name="keywords" content="HTML, sample, QW Editor, testing">
+    <meta name="author" content="QW Editor Team">
+    
+    <title>Sample HTML Document | QW Editor Testing</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="alternate icon" href="/favicon.ico">
+    
+    <!-- Preconnect for performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/components.css" media="screen">
+    <link rel="stylesheet" href="styles/print.css" media="print">
+    
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="Sample HTML Document">
+    <meta property="og:description" content="Testing QW Editor syntax highlighting">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://example.com/sample">
+    <meta property="og:image" content="https://example.com/og-image.png">
+    
+    <!-- Twitter Card Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Sample HTML Document">
+    <meta name="twitter:description" content="Testing QW Editor syntax highlighting">
+    
+    <!-- Inline critical CSS -->
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --secondary-color: #6c757d;
+            --success-color: #28a745;
+            --danger-color: #dc3545;
+            --background-color: #ffffff;
+            --text-color: #333333;
+            --border-radius: 8px;
+            --spacing-unit: 16px;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background-color: var(--background-color);
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 var(--spacing-unit);
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Skip Navigation Link for Accessibility -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    
+    <!-- Header with Navigation -->
+    <header role="banner" class="site-header">
+        <div class="container">
+            <!-- Logo -->
+            <div class="logo">
+                <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
+                    <circle cx="20" cy="20" r="18" fill="var(--primary-color)" />
+                    <text x="20" y="26" text-anchor="middle" fill="white" font-size="16" font-weight="bold">QW</text>
+                </svg>
+                <span class="logo-text">QW Editor</span>
+            </div>
+            
+            <!-- Primary Navigation -->
+            <nav aria-label="Primary navigation" role="navigation">
+                <button 
+                    class="nav-toggle" 
+                    aria-expanded="false" 
+                    aria-controls="primary-menu"
+                    aria-label="Toggle navigation menu"
+                >
+                    <span class="hamburger-line"></span>
+                    <span class="hamburger-line"></span>
+                    <span class="hamburger-line"></span>
+                </button>
+                
+                <ul id="primary-menu" class="nav-menu">
+                    <li><a href="/" aria-current="page">Home</a></li>
+                    <li>
+                        <a href="/features" aria-haspopup="true" aria-expanded="false">
+                            Features
+                            <span aria-hidden="true">▼</span>
+                        </a>
+                        <ul class="dropdown-menu" role="menu">
+                            <li role="menuitem"><a href="/features/syntax">Syntax Highlighting</a></li>
+                            <li role="menuitem"><a href="/features/export">Export Options</a></li>
+                            <li role="menuitem"><a href="/features/themes">Themes</a></li>
+                            <li role="menuitem"><a href="/features/cli">CLI Tools</a></li>
+                        </ul>
+                    </li>
+                    <li><a href="/docs">Documentation</a></li>
+                    <li><a href="/download">Download</a></li>
+                    <li><a href="/contact">Contact</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+    
+    <!-- Hero Section -->
+    <section class="hero" aria-labelledby="hero-title">
+        <div class="container">
+            <h1 id="hero-title">Welcome to QW Editor</h1>
+            <p class="hero-subtitle">A lightweight, fast, and beautiful text editor for developers</p>
+            
+            <div class="hero-actions">
+                <a href="/download" class="btn btn-primary">
+                    Download Now
+                    <span aria-hidden="true">→</span>
+                </a>
+                <a href="/demo" class="btn btn-secondary">Try Online Demo</a>
+            </div>
+            
+            <!-- Feature highlights -->
+            <ul class="feature-list" aria-label="Key features">
+                <li>
+                    <span class="icon" aria-hidden="true">⚡</span>
+                    Lightning Fast
+                </li>
+                <li>
+                    <span class="icon" aria-hidden="true">🎨</span>
+                    Beautiful Themes
+                </li>
+                <li>
+                    <span class="icon" aria-hidden="true">🔧</span>
+                    Highly Customizable
+                </li>
+            </ul>
+        </div>
+    </section>
+    
+    <!-- Main Content -->
+    <main id="main-content" role="main">
+        <!-- About Section -->
+        <section class="section" aria-labelledby="about-title">
+            <div class="container">
+                <h2 id="about-title">About QW Editor</h2>
+                
+                <article itemscope itemtype="https://schema.org/SoftwareApplication">
+                    <meta itemprop="name" content="QW Editor">
+                    <meta itemprop="applicationCategory" content="Text Editor">
+                    
+                    <p itemprop="description">
+                        QW Editor is a modern, native text editor designed for macOS and iOS. 
+                        It provides syntax highlighting for multiple programming languages, 
+                        powerful export features, and a beautiful user interface.
+                    </p>
+                    
+                    <dl class="info-list">
+                        <dt>Version</dt>
+                        <dd itemprop="softwareVersion">1.0.0</dd>
+                        
+                        <dt>License</dt>
+                        <dd>MIT License</dd>
+                        
+                        <dt>Platforms</dt>
+                        <dd itemprop="operatingSystem">macOS, iOS</dd>
+                        
+                        <dt>Languages</dt>
+                        <dd>Swift, JavaScript, Python, HTML, CSS, and more</dd>
+                    </dl>
+                </article>
+            </div>
+        </section>
+        
+        <!-- Features Table -->
+        <section class="section" aria-labelledby="features-title">
+            <div class="container">
+                <h2 id="features-title">Feature Comparison</h2>
+                
+                <div class="table-responsive">
+                    <table class="features-table" role="grid" aria-describedby="table-description">
+                        <caption id="table-description">
+                            Comparison of QW Editor features across different versions
+                        </caption>
+                        
+                        <thead>
+                            <tr>
+                                <th scope="col">Feature</th>
+                                <th scope="col">Free</th>
+                                <th scope="col">Pro</th>
+                                <th scope="col">Enterprise</th>
+                            </tr>
+                        </thead>
+                        
+                        <tbody>
+                            <tr>
+                                <th scope="row">Syntax Highlighting</th>
+                                <td><span aria-label="Included">✓</span></td>
+                                <td><span aria-label="Included">✓</span></td>
+                                <td><span aria-label="Included">✓</span></td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Export to PDF</th>
+                                <td><span aria-label="Not included">—</span></td>
+                                <td><span aria-label="Included">✓</span></td>
+                                <td><span aria-label="Included">✓</span></td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Export to PNG</th>
+                                <td><span aria-label="Not included">—</span></td>
+                                <td><span aria-label="Included">✓</span></td>
+                                <td><span aria-label="Included">✓</span></td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Custom Themes</th>
+                                <td>3 themes</td>
+                                <td>Unlimited</td>
+                                <td>Unlimited + Custom</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">CLI Tools</th>
+                                <td><span aria-label="Not included">—</span></td>
+                                <td><span aria-label="Included">✓</span></td>
+                                <td><span aria-label="Included">✓</span></td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Priority Support</th>
+                                <td><span aria-label="Not included">—</span></td>
+                                <td><span aria-label="Not included">—</span></td>
+                                <td><span aria-label="Included">✓</span></td>
+                            </tr>
+                        </tbody>
+                        
+                        <tfoot>
+                            <tr>
+                                <th scope="row">Price</th>
+                                <td>Free</td>
+                                <td>$29/year</td>
+                                <td>$99/year</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Contact Form -->
+        <section class="section" aria-labelledby="contact-title">
+            <div class="container">
+                <h2 id="contact-title">Get in Touch</h2>
+                
+                <form 
+                    id="contact-form" 
+                    action="/api/contact" 
+                    method="POST" 
+                    class="form"
+                    aria-describedby="form-instructions"
+                >
+                    <p id="form-instructions" class="form-instructions">
+                        Fields marked with <span aria-hidden="true">*</span>
+                        <span class="sr-only">asterisk</span> are required.
+                    </p>
+                    
+                    <!-- Name Field -->
+                    <div class="form-group">
+                        <label for="name">
+                            Full Name <span aria-hidden="true">*</span>
+                        </label>
+                        <input 
+                            type="text" 
+                            id="name" 
+                            name="name" 
+                            required 
+                            autocomplete="name"
+                            placeholder="John Doe"
+                            minlength="2"
+                            maxlength="100"
+                            aria-required="true"
+                        >
+                        <span class="error-message" role="alert"></span>
+                    </div>
+                    
+                    <!-- Email Field -->
+                    <div class="form-group">
+                        <label for="email">
+                            Email Address <span aria-hidden="true">*</span>
+                        </label>
+                        <input 
+                            type="email" 
+                            id="email" 
+                            name="email" 
+                            required 
+                            autocomplete="email"
+                            placeholder="john@example.com"
+                            aria-required="true"
+                            aria-describedby="email-hint"
+                        >
+                        <span id="email-hint" class="hint">We'll never share your email.</span>
+                        <span class="error-message" role="alert"></span>
+                    </div>
+                    
+                    <!-- Subject Dropdown -->
+                    <div class="form-group">
+                        <label for="subject">Subject <span aria-hidden="true">*</span></label>
+                        <select id="subject" name="subject" required aria-required="true">
+                            <option value="">Select a subject...</option>
+                            <optgroup label="Support">
+                                <option value="bug">Bug Report</option>
+                                <option value="feature">Feature Request</option>
+                                <option value="help">Technical Support</option>
+                            </optgroup>
+                            <optgroup label="Business">
+                                <option value="license">Licensing Question</option>
+                                <option value="partnership">Partnership Inquiry</option>
+                            </optgroup>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Priority Radio Buttons -->
+                    <fieldset class="form-group">
+                        <legend>Priority Level</legend>
+                        <div class="radio-group">
+                            <label>
+                                <input type="radio" name="priority" value="low">
+                                <span>Low</span>
+                            </label>
+                            <label>
+                                <input type="radio" name="priority" value="normal" checked>
+                                <span>Normal</span>
+                            </label>
+                            <label>
+                                <input type="radio" name="priority" value="high">
+                                <span>High</span>
+                            </label>
+                        </div>
+                    </fieldset>
+                    
+                    <!-- Message Textarea -->
+                    <div class="form-group">
+                        <label for="message">
+                            Message <span aria-hidden="true">*</span>
+                        </label>
+                        <textarea 
+                            id="message" 
+                            name="message" 
+                            rows="6"
+                            required
+                            minlength="20"
+                            maxlength="2000"
+                            placeholder="Please describe your inquiry in detail..."
+                            aria-required="true"
+                        ></textarea>
+                        <span class="char-count" aria-live="polite">0/2000 characters</span>
+                    </div>
+                    
+                    <!-- File Upload -->
+                    <div class="form-group">
+                        <label for="attachment">Attachments (optional)</label>
+                        <input 
+                            type="file" 
+                            id="attachment" 
+                            name="attachment"
+                            accept=".pdf,.png,.jpg,.jpeg,.gif,.txt,.log"
+                            multiple
+                            aria-describedby="file-hint"
+                        >
+                        <span id="file-hint" class="hint">
+                            Max 5MB per file. Accepted formats: PDF, PNG, JPG, GIF, TXT, LOG
+                        </span>
+                    </div>
+                    
+                    <!-- Checkbox for Terms -->
+                    <div class="form-group checkbox-group">
+                        <label>
+                            <input type="checkbox" name="terms" required aria-required="true">
+                            <span>
+                                I agree to the <a href="/terms">Terms of Service</a> 
+                                and <a href="/privacy">Privacy Policy</a>
+                                <span aria-hidden="true">*</span>
+                            </span>
+                        </label>
+                    </div>
+                    
+                    <!-- Submit Button -->
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">
+                            Send Message
+                        </button>
+                        <button type="reset" class="btn btn-secondary">
+                            Clear Form
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </section>
+        
+        <!-- Media Section -->
+        <section class="section" aria-labelledby="media-title">
+            <div class="container">
+                <h2 id="media-title">Media Gallery</h2>
+                
+                <!-- Image with figure -->
+                <figure class="media-item">
+                    <picture>
+                        <source srcset="images/screenshot-dark.webp" type="image/webp" media="(prefers-color-scheme: dark)">
+                        <source srcset="images/screenshot-light.webp" type="image/webp">
+                        <source srcset="images/screenshot-dark.png" media="(prefers-color-scheme: dark)">
+                        <img 
+                            src="images/screenshot-light.png" 
+                            alt="QW Editor interface showing syntax highlighting for a Swift file"
+                            loading="lazy"
+                            width="800"
+                            height="600"
+                        >
+                    </picture>
+                    <figcaption>QW Editor with Swift syntax highlighting</figcaption>
+                </figure>
+                
+                <!-- Video with captions -->
+                <figure class="media-item">
+                    <video 
+                        controls 
+                        preload="metadata"
+                        poster="videos/demo-poster.jpg"
+                        width="800"
+                        height="450"
+                    >
+                        <source src="videos/demo.webm" type="video/webm">
+                        <source src="videos/demo.mp4" type="video/mp4">
+                        <track kind="captions" src="videos/demo-en.vtt" srclang="en" label="English" default>
+                        <track kind="captions" src="videos/demo-es.vtt" srclang="es" label="Español">
+                        <p>Your browser doesn't support HTML5 video. 
+                           <a href="videos/demo.mp4">Download the video</a> instead.
+                        </p>
+                    </video>
+                    <figcaption>Quick tour of QW Editor features (3 minutes)</figcaption>
+                </figure>
+            </div>
+        </section>
+    </main>
+    
+    <!-- Footer -->
+    <footer role="contentinfo" class="site-footer">
+        <div class="container">
+            <div class="footer-grid">
+                <!-- Company Info -->
+                <div class="footer-section">
+                    <h3>QW Editor</h3>
+                    <p>A lightweight, fast, and beautiful text editor.</p>
+                    <address>
+                        <a href="mailto:hello@qweditor.com">hello@qweditor.com</a>
+                    </address>
+                </div>
+                
+                <!-- Quick Links -->
+                <nav class="footer-section" aria-label="Footer navigation">
+                    <h3>Quick Links</h3>
+                    <ul>
+                        <li><a href="/features">Features</a></li>
+                        <li><a href="/pricing">Pricing</a></li>
+                        <li><a href="/docs">Documentation</a></li>
+                        <li><a href="/blog">Blog</a></li>
+                    </ul>
+                </nav>
+                
+                <!-- Legal Links -->
+                <nav class="footer-section" aria-label="Legal">
+                    <h3>Legal</h3>
+                    <ul>
+                        <li><a href="/terms">Terms of Service</a></li>
+                        <li><a href="/privacy">Privacy Policy</a></li>
+                        <li><a href="/cookies">Cookie Policy</a></li>
+                        <li><a href="/licenses">Open Source Licenses</a></li>
+                    </ul>
+                </nav>
+                
+                <!-- Social Links -->
+                <div class="footer-section">
+                    <h3>Follow Us</h3>
+                    <ul class="social-links">
+                        <li>
+                            <a href="https://github.com/qweditor" aria-label="GitHub">
+                                <svg aria-hidden="true" width="24" height="24">
+                                    <use href="#icon-github"></use>
+                                </svg>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="https://twitter.com/qweditor" aria-label="Twitter">
+                                <svg aria-hidden="true" width="24" height="24">
+                                    <use href="#icon-twitter"></use>
+                                </svg>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <hr>
+            
+            <div class="footer-bottom">
+                <p>&copy; <time datetime="2024">2024</time> QW Editor. All rights reserved.</p>
+                <p>Made with ❤️ using Swift and SwiftUI</p>
+            </div>
+        </div>
+    </footer>
+    
+    <!-- Scripts -->
+    <script src="scripts/main.js" defer></script>
+    <script src="scripts/form-validation.js" defer></script>
+    
+    <!-- Inline script for critical functionality -->
+    <script>
+        // Feature detection and polyfills
+        (function() {
+            'use strict';
+            
+            // Check for required features
+            const features = {
+                fetch: typeof fetch !== 'undefined',
+                promise: typeof Promise !== 'undefined',
+                customElements: 'customElements' in window
+            };
+            
+            // Log feature support
+            console.log('Browser features:', features);
+            
+            // Initialize navigation toggle
+            document.addEventListener('DOMContentLoaded', function() {
+                const navToggle = document.querySelector('.nav-toggle');
+                const navMenu = document.getElementById('primary-menu');
+                
+                if (navToggle && navMenu) {
+                    navToggle.addEventListener('click', function() {
+                        const isExpanded = this.getAttribute('aria-expanded') === 'true';
+                        this.setAttribute('aria-expanded', !isExpanded);
+                        navMenu.classList.toggle('is-open');
+                    });
+                }
+            });
+        })();
+    </script>
+</body>
+</html>

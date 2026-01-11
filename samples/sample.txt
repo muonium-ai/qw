@@ -1,0 +1,445 @@
+Sample Text Document for QW Editor Testing
+==========================================
+
+A comprehensive plain text example demonstrating text file handling.
+
+Created: December 2024
+Author: QW Editor Team
+Version: 1.0.0
+
+--------------------------------------------------------------------------------
+                              TABLE OF CONTENTS
+--------------------------------------------------------------------------------
+
+1. Introduction
+2. Features Overview
+3. Installation Instructions
+4. Usage Guide
+5. Keyboard Shortcuts
+6. Configuration Options
+7. Export Formats
+8. CLI Reference
+9. Troubleshooting
+10. License Information
+
+--------------------------------------------------------------------------------
+                               1. INTRODUCTION
+--------------------------------------------------------------------------------
+
+Welcome to QW Editor!
+
+QW Editor is a lightweight, fast, and beautiful text editor designed for 
+developers and writers who value simplicity and performance. Built with 
+native technologies, QW delivers a seamless editing experience on macOS 
+and iOS devices.
+
+Key Principles:
+    • Simplicity - Clean interface without clutter
+    • Speed - Native performance with no compromise  
+    • Beauty - Carefully crafted visual design
+    • Focus - Distraction-free writing environment
+
+--------------------------------------------------------------------------------
+                            2. FEATURES OVERVIEW
+--------------------------------------------------------------------------------
+
+CORE FEATURES
+-------------
+
+Syntax Highlighting
+    QW Editor provides syntax highlighting for multiple programming 
+    languages and markup formats:
+    
+    • Swift              • Python           • JavaScript
+    • HTML               • CSS              • JSON
+    • YAML               • Markdown         • Plain Text
+
+Export Capabilities
+    Export your documents in various formats:
+    
+    • PDF  - High-quality printable documents with syntax highlighting
+    • PNG  - Image snapshots perfect for sharing code snippets
+    • Print - Direct printing with customizable page settings
+
+Theme Support
+    Choose from multiple themes or create your own:
+    
+    • QW Dark  - Easy on the eyes for long coding sessions
+    • QW Light - Perfect for well-lit environments
+    • Solarized Dark - Popular color scheme for developers
+    • Solarized Light - Light variant of Solarized
+
+Font Customization
+    Customize your editing experience:
+    
+    • Font family selection
+    • Adjustable font size (8-72 pt)
+    • Line height control
+    • Ligature support
+
+--------------------------------------------------------------------------------
+                        3. INSTALLATION INSTRUCTIONS
+--------------------------------------------------------------------------------
+
+SYSTEM REQUIREMENTS
+-------------------
+
+macOS:
+    • macOS 14.0 (Sonoma) or later
+    • Apple Silicon or Intel processor
+    • 100 MB available storage
+
+iOS/iPadOS:
+    • iOS 17.0 / iPadOS 17.0 or later
+    • Compatible with iPhone and iPad
+    • 50 MB available storage
+
+INSTALLATION STEPS
+------------------
+
+Mac App Store:
+    1. Open the Mac App Store
+    2. Search for "QW Editor"
+    3. Click "Get" or the download button
+    4. Enter your Apple ID password if prompted
+    5. Wait for installation to complete
+    6. Find QW Editor in your Applications folder
+
+Direct Download:
+    1. Visit https://qweditor.com/download
+    2. Click "Download for macOS"
+    3. Open the downloaded DMG file
+    4. Drag QW Editor to Applications
+    5. Eject the DMG volume
+    6. Launch QW Editor from Applications
+
+CLI Tool Installation:
+    1. Open Terminal
+    2. Run: qw --install-cli
+    3. Enter your admin password when prompted
+    4. Verify with: qw --version
+
+--------------------------------------------------------------------------------
+                              4. USAGE GUIDE
+--------------------------------------------------------------------------------
+
+GETTING STARTED
+---------------
+
+Creating a New Document:
+    1. Launch QW Editor
+    2. Press Cmd+N or choose File > New
+    3. Start typing your content
+    4. Save with Cmd+S
+
+Opening Existing Files:
+    1. Press Cmd+O or choose File > Open
+    2. Navigate to your file location
+    3. Select the file and click Open
+    4. Alternatively, drag and drop files onto the QW icon
+
+Supported File Types:
+    Extension   Language        MIME Type
+    ---------   --------        ---------
+    .txt        Plain Text      text/plain
+    .md         Markdown        text/markdown
+    .swift      Swift           text/x-swift
+    .py         Python          text/x-python
+    .js         JavaScript      text/javascript
+    .html       HTML            text/html
+    .css        CSS             text/css
+    .json       JSON            application/json
+    .yaml/.yml  YAML            text/yaml
+
+EDITING FEATURES
+----------------
+
+Basic Editing:
+    • Cut (Cmd+X)         - Remove selected text and copy to clipboard
+    • Copy (Cmd+C)        - Copy selected text to clipboard
+    • Paste (Cmd+V)       - Insert clipboard content at cursor
+    • Undo (Cmd+Z)        - Reverse the last action
+    • Redo (Cmd+Shift+Z)  - Restore the undone action
+
+Selection:
+    • Select All (Cmd+A)  - Select all text in document
+    • Select Word         - Double-click on a word
+    • Select Line         - Triple-click on a line
+    • Extend Selection    - Shift+Arrow keys
+
+Find and Replace:
+    • Find (Cmd+F)        - Open find panel
+    • Find Next (Cmd+G)   - Jump to next match
+    • Find Previous       - Jump to previous match (Cmd+Shift+G)
+    • Replace (Cmd+H)     - Open replace panel
+
+--------------------------------------------------------------------------------
+                           5. KEYBOARD SHORTCUTS
+--------------------------------------------------------------------------------
+
+FILE OPERATIONS
+---------------
+    Cmd+N           New Document
+    Cmd+O           Open Document
+    Cmd+S           Save
+    Cmd+Shift+S     Save As
+    Cmd+W           Close Document
+    Cmd+P           Print
+
+EDITING
+-------
+    Cmd+Z           Undo
+    Cmd+Shift+Z     Redo
+    Cmd+X           Cut
+    Cmd+C           Copy
+    Cmd+V           Paste
+    Cmd+A           Select All
+    Cmd+D           Duplicate Line
+
+FIND & REPLACE
+--------------
+    Cmd+F           Find
+    Cmd+G           Find Next
+    Cmd+Shift+G     Find Previous
+    Cmd+H           Replace
+    Cmd+Shift+H     Replace All
+
+VIEW
+----
+    Cmd+=           Zoom In
+    Cmd+-           Zoom Out
+    Cmd+0           Reset Zoom
+    Cmd+Shift+L     Toggle Line Numbers
+    Cmd+Shift+W     Toggle Word Wrap
+
+EXPORT
+------
+    Cmd+Shift+E     Export as PDF
+    Cmd+Shift+P     Export as PNG
+
+--------------------------------------------------------------------------------
+                          6. CONFIGURATION OPTIONS
+--------------------------------------------------------------------------------
+
+EDITOR SETTINGS
+---------------
+
+Line Numbers:
+    Show or hide line numbers in the gutter.
+    Default: Enabled
+    
+    Settings > Editor > Show Line Numbers
+
+Word Wrap:
+    Control how long lines are displayed.
+    Options: On (wrap at window edge), Off (horizontal scroll)
+    Default: On
+    
+    Settings > Editor > Word Wrap
+
+Tab Size:
+    Number of spaces for tab indentation.
+    Range: 1-8
+    Default: 4
+    
+    Settings > Editor > Tab Size
+
+Auto-Save:
+    Automatically save documents after changes.
+    Default: Enabled (1 second delay)
+    
+    Settings > Editor > Auto Save
+
+THEME SETTINGS
+--------------
+
+Theme Selection:
+    Choose your preferred color scheme.
+    
+    Settings > Appearance > Theme
+
+Font Settings:
+    Customize the editor font.
+    
+    Font Family: SF Mono, Menlo, Monaco, Consolas
+    Font Size: 8-72 pt
+    Line Height: 1.0-2.0
+    
+    Settings > Appearance > Font
+
+--------------------------------------------------------------------------------
+                            7. EXPORT FORMATS
+--------------------------------------------------------------------------------
+
+PDF EXPORT
+----------
+
+QW Editor creates high-quality PDF documents with:
+    • Syntax highlighting preserved
+    • Line numbers (optional)
+    • Custom page sizes (A4, Letter, Legal, Tabloid)
+    • Header and footer support
+    • Multiple pages for long documents
+
+Export Options:
+    • Page Size: A4, Letter, Legal, Tabloid
+    • Orientation: Portrait, Landscape
+    • Line Numbers: On/Off
+    • Theme: Current theme or specific selection
+
+PNG EXPORT
+----------
+
+Create image snapshots of your code:
+    • High-resolution output (2x scale)
+    • Syntax highlighting preserved
+    • Line numbers (optional)
+    • Customizable background color
+    • Perfect for social media sharing
+
+Export Options:
+    • Scale: 1x, 2x, 3x
+    • Background: Theme background or custom
+    • Line Numbers: On/Off
+    • Padding: 16-64 pixels
+
+--------------------------------------------------------------------------------
+                             8. CLI REFERENCE
+--------------------------------------------------------------------------------
+
+The QW Editor CLI provides command-line access to export features.
+
+INSTALLATION
+------------
+    qw --install-cli
+
+BASIC USAGE
+-----------
+    qw [options] <input-file>
+
+OPTIONS
+-------
+    --pdf                Export to PDF format
+    --png                Export to PNG format
+    --print              Print the document
+    -o, --output <path>  Specify output file path
+    --no-line-numbers    Disable line numbers in export
+    --theme <name>       Use specific theme (dark/light/solarized-dark/solarized-light)
+    --help               Show help information
+    --version            Show version information
+
+EXAMPLES
+--------
+
+Export to PDF:
+    qw --pdf sample.swift -o output.pdf
+
+Export to PNG without line numbers:
+    qw --png --no-line-numbers sample.py -o output.png
+
+Export with specific theme:
+    qw --pdf --theme solarized-dark sample.js -o output.pdf
+
+Print a document:
+    qw --print document.md
+
+--------------------------------------------------------------------------------
+                            9. TROUBLESHOOTING
+--------------------------------------------------------------------------------
+
+COMMON ISSUES
+-------------
+
+Issue: Syntax highlighting not working
+Solution: 
+    1. Check that the file has the correct extension
+    2. Try saving the file with the appropriate extension
+    3. Restart QW Editor
+
+Issue: Export produces blank PDF
+Solution:
+    1. Ensure the document has content
+    2. Check available disk space
+    3. Try exporting to a different location
+    4. Update to the latest version
+
+Issue: CLI command not found
+Solution:
+    1. Run: qw --install-cli
+    2. Restart your terminal
+    3. Verify installation: which qw
+
+Issue: Fonts not rendering correctly
+Solution:
+    1. Install the required fonts (SF Mono, Menlo)
+    2. Check Settings > Appearance > Font
+    3. Select a different font family
+
+GETTING HELP
+------------
+
+If you encounter issues not covered here:
+
+    1. Check our FAQ: https://qweditor.com/faq
+    2. Visit our support forum: https://qweditor.com/community
+    3. Report bugs: https://github.com/muonium-ai/qw/issues
+    4. Email support: support@qweditor.com
+
+When reporting issues, please include:
+    • QW Editor version
+    • macOS/iOS version
+    • Steps to reproduce
+    • Error messages (if any)
+    • Sample file (if applicable)
+
+--------------------------------------------------------------------------------
+                          10. LICENSE INFORMATION
+--------------------------------------------------------------------------------
+
+QW Editor
+Copyright (c) 2024 Muonium AI
+
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+--------------------------------------------------------------------------------
+
+THIRD-PARTY ACKNOWLEDGMENTS
+---------------------------
+
+QW Editor uses the following open-source components:
+
+    • Swift - Apple Inc. (Apache License 2.0)
+    • SwiftUI - Apple Inc.
+    • AppKit - Apple Inc.
+
+Thank you to all contributors and the open-source community!
+
+================================================================================
+                               END OF DOCUMENT
+================================================================================
+
+Last Updated: December 2024
+Document Version: 1.0.0
+
+For the latest version of this document, visit:
+https://qweditor.com/docs
+
+================================================================================

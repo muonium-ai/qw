@@ -50,3 +50,6 @@ playground.xcworkspace
 crashlytics-build.properties
 crashlytics.properties
 fabric.properties
+
+# Test output
+output/

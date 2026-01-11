@@ -8,9 +8,38 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+#if os(macOS)
+import AppKit
+
+/// App delegate to handle application lifecycle events
+class QWAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Create a new document on launch if no documents are open
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            if NSDocumentController.shared.documents.isEmpty {
+                NSDocumentController.shared.newDocument(nil)
+            }
+        }
+    }
+    
+    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
+        return true
+    }
+    
+    func applicationOpenUntitledFile(_ sender: NSApplication) -> Bool {
+        NSDocumentController.shared.newDocument(nil)
+        return true
+    }
+}
+#endif
+
 @main
 struct qwApp: App {
     @FocusedValue(\.searchState) private var searchState
+    
+    #if os(macOS)
+    @NSApplicationDelegateAdaptor(QWAppDelegate.self) var appDelegate
+    #endif
     
     var body: some Scene {
         // Document-based scene for file editing

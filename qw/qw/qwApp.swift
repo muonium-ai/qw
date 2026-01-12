@@ -36,6 +36,10 @@ class QWAppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct qwApp: App {
     @FocusedValue(\.searchState) private var searchState
+    @FocusedValue(\.documentPrintAction) private var documentPrintAction
+    @FocusedValue(\.documentExportAction) private var documentExportAction
+    @FocusedValue(\.documentExportPDFAction) private var documentExportPDFAction
+    @FocusedValue(\.documentExportPNGAction) private var documentExportPNGAction
     
     #if os(macOS)
     @NSApplicationDelegateAdaptor(QWAppDelegate.self) var appDelegate
@@ -57,7 +61,11 @@ struct qwApp: App {
             // File menu - Print
             CommandGroup(replacing: .printItem) {
                 Button("Print...") {
-                    NotificationCenter.default.post(name: .printDocument, object: nil)
+                    if let action = documentPrintAction {
+                        action()
+                    } else {
+                        NSSound.beep()
+                    }
                 }
                 .keyboardShortcut("p", modifiers: .command)
             }
@@ -65,18 +73,30 @@ struct qwApp: App {
             // File menu - Export options
             CommandGroup(after: .saveItem) {
                 Button("Export As...") {
-                    NotificationCenter.default.post(name: .exportDocument, object: nil)
+                    if let action = documentExportAction {
+                        action()
+                    } else {
+                        NSSound.beep()
+                    }
                 }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
                 
                 Divider()
                 
                 Button("Export as PDF...") {
-                    NotificationCenter.default.post(name: .exportPDF, object: nil)
+                    if let action = documentExportPDFAction {
+                        action()
+                    } else {
+                        NSSound.beep()
+                    }
                 }
                 
                 Button("Export as PNG...") {
-                    NotificationCenter.default.post(name: .exportPNG, object: nil)
+                    if let action = documentExportPNGAction {
+                        action()
+                    } else {
+                        NSSound.beep()
+                    }
                 }
             }
             

@@ -19,7 +19,6 @@ struct DocumentEditorView: View {
     
     @State private var fileType: SupportedFileType = .plainText
     @StateObject private var searchState = SearchState()
-    @State private var showExportSheet = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -72,20 +71,14 @@ struct DocumentEditorView: View {
                 .accessibilityIdentifier("toggleSearchButton")
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .exportDocument)) { _ in
-            exportDocument()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .printDocument)) { _ in
-            printDocument()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .exportPDF)) { _ in
-            exportAsPDF()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .exportPNG)) { _ in
-            exportAsPNG()
-        }
         #endif
         .focusedSceneValue(\.searchState, searchState)
+        #if os(macOS)
+        .focusedSceneValue(\.documentExportAction, { exportDocument() })
+        .focusedSceneValue(\.documentPrintAction, { printDocument() })
+        .focusedSceneValue(\.documentExportPDFAction, { exportAsPDF() })
+        .focusedSceneValue(\.documentExportPNGAction, { exportAsPNG() })
+        #endif
     }
     
     private func updateFileType() {
@@ -175,10 +168,47 @@ struct SearchStateFocusKey: FocusedValueKey {
     typealias Value = SearchState
 }
 
+// MARK: - Focus Values for Document Actions (Print/Export)
+struct DocumentPrintActionFocusKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
+struct DocumentExportActionFocusKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
+struct DocumentExportPDFActionFocusKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
+struct DocumentExportPNGActionFocusKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
 extension FocusedValues {
     var searchState: SearchState? {
         get { self[SearchStateFocusKey.self] }
         set { self[SearchStateFocusKey.self] = newValue }
+    }
+
+    var documentPrintAction: (() -> Void)? {
+        get { self[DocumentPrintActionFocusKey.self] }
+        set { self[DocumentPrintActionFocusKey.self] = newValue }
+    }
+
+    var documentExportAction: (() -> Void)? {
+        get { self[DocumentExportActionFocusKey.self] }
+        set { self[DocumentExportActionFocusKey.self] = newValue }
+    }
+
+    var documentExportPDFAction: (() -> Void)? {
+        get { self[DocumentExportPDFActionFocusKey.self] }
+        set { self[DocumentExportPDFActionFocusKey.self] = newValue }
+    }
+
+    var documentExportPNGAction: (() -> Void)? {
+        get { self[DocumentExportPNGActionFocusKey.self] }
+        set { self[DocumentExportPNGActionFocusKey.self] = newValue }
     }
 }
 

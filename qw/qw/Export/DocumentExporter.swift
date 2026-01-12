@@ -202,16 +202,35 @@ class DocumentExporter {
     
     // MARK: - Export to PDF
     
+    // MARK: - PDF Export Configuration
+    
+    /// Number of lines per page in PDF export (adjust as needed)
+    private let pdfLinesPerPage: Int = 25
+    
     func exportToPDF(to url: URL) throws {
         let attributedString = createAttributedString()
         
-        // Page size (A4: 210mm x 297mm at 72 DPI)
+        // Page size (A4: 210mm x 297mm at 72 DPI = 595 x 842 points)
         let pageWidth: CGFloat = 595
         let pageHeight: CGFloat = 842
-        let margin: CGFloat = 36
+        
+        // Margins (in points, 72 points = 1 inch)
+        let marginLeft: CGFloat = 50      // ~0.7 inch left margin
+        let marginRight: CGFloat = 50     // ~0.7 inch right margin
+        let marginTop: CGFloat = 60       // ~0.8 inch top margin (space for header)
+        let marginBottom: CGFloat = 60    // ~0.8 inch bottom margin (space for footer/page number)
         
         // Generate PDF data and write to file
-        let pdfData = generatePDFData(attributedString: attributedString, pageWidth: pageWidth, pageHeight: pageHeight, margin: margin)
+        let pdfData = generatePDFData(
+            attributedString: attributedString,
+            pageWidth: pageWidth,
+            pageHeight: pageHeight,
+            marginLeft: marginLeft,
+            marginRight: marginRight,
+            marginTop: marginTop,
+            marginBottom: marginBottom,
+            linesPerPage: pdfLinesPerPage
+        )
         
         if pdfData.isEmpty {
             throw ExportError.pdfCreationFailed
@@ -220,10 +239,19 @@ class DocumentExporter {
         try pdfData.write(to: url)
     }
     
-    private func generatePDFData(attributedString: NSAttributedString, pageWidth: CGFloat, pageHeight: CGFloat, margin: CGFloat) -> Data {
-        let contentWidth = pageWidth - (margin * 2)
+    private func generatePDFData(
+        attributedString: NSAttributedString,
+        pageWidth: CGFloat,
+        pageHeight: CGFloat,
+        marginLeft: CGFloat,
+        marginRight: CGFloat,
+        marginTop: CGFloat,
+        marginBottom: CGFloat,
+        linesPerPage: Int
+    ) -> Data {
+        let contentWidth = pageWidth - marginLeft - marginRight
         
-        // Use NSTextView's built-in PDF generation which handles coordinate systems correctly
+        // Set up text layout system
         let textStorage = NSTextStorage(attributedString: attributedString)
         let layoutManager = NSLayoutManager()
         textStorage.addLayoutManager(layoutManager)
@@ -232,27 +260,118 @@ class DocumentExporter {
         textContainer.lineFragmentPadding = 0
         layoutManager.addTextContainer(textContainer)
         
-        // Force layout
+        // Force complete layout
         layoutManager.ensureLayout(for: textContainer)
-        let usedRect = layoutManager.usedRect(for: textContainer)
         
-        // Create a text view sized to fit all content
-        let textView = NSTextView(frame: NSRect(x: margin, y: margin, width: contentWidth, height: usedRect.height))
-        textView.textStorage?.setAttributedString(attributedString)
-        textView.backgroundColor = NSColor(theme.background)
-        textView.drawsBackground = true
+        // Collect all line rectangles and their glyph ranges
+        var lineInfos: [(rect: CGRect, glyphRange: NSRange)] = []
+        let fullGlyphRange = layoutManager.glyphRange(for: textContainer)
         
-        // Create a container view with background that includes margins
-        let containerHeight = usedRect.height + (margin * 2)
-        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: pageWidth, height: containerHeight))
-        containerView.wantsLayer = true
-        containerView.layer?.backgroundColor = NSColor(theme.background).cgColor
-        containerView.addSubview(textView)
+        var glyphIndex = fullGlyphRange.location
+        while glyphIndex < NSMaxRange(fullGlyphRange) {
+            var lineRect = CGRect.zero
+            var lineGlyphRange = NSRange(location: 0, length: 0)
+            
+            lineRect = layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: &lineGlyphRange)
+            lineInfos.append((rect: lineRect, glyphRange: lineGlyphRange))
+            
+            glyphIndex = NSMaxRange(lineGlyphRange)
+        }
         
-        // Use dataWithPDF which handles all coordinate transforms correctly
-        let pdfData = containerView.dataWithPDF(inside: containerView.bounds)
+        // Calculate pages based on complete lines
+        let totalLines = lineInfos.count
+        let totalPages = max(1, Int(ceil(Double(totalLines) / Double(linesPerPage))))
         
-        return pdfData
+        // Create PDF
+        let pdfData = NSMutableData()
+        var mediaBox = CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight)
+        
+        guard let consumer = CGDataConsumer(data: pdfData as CFMutableData),
+              let pdfContext = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else {
+            return Data()
+        }
+        
+        for pageIndex in 0..<totalPages {
+            pdfContext.beginPDFPage(nil)
+            pdfContext.saveGState()
+            
+            // Fill page background
+            pdfContext.setFillColor(NSColor(theme.background).cgColor)
+            pdfContext.fill(CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight))
+            
+            // Calculate which lines go on this page
+            let startLineIndex = pageIndex * linesPerPage
+            let endLineIndex = min(startLineIndex + linesPerPage, totalLines)
+            
+            guard startLineIndex < totalLines else {
+                pdfContext.restoreGState()
+                pdfContext.endPDFPage()
+                continue
+            }
+            
+            // Get the Y offset of the first line on this page (to normalize positions)
+            let firstLineY = lineInfos[startLineIndex].rect.origin.y
+            
+            // Transform for PDF: flip coordinate system
+            // PDF origin is bottom-left, we need top-left with Y going down
+            // Position content area with proper margins
+            pdfContext.translateBy(x: marginLeft, y: pageHeight - marginTop)
+            pdfContext.scaleBy(x: 1.0, y: -1.0)
+            
+            // Set up NSGraphicsContext for drawing
+            let nsContext = NSGraphicsContext(cgContext: pdfContext, flipped: true)
+            
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = nsContext
+            
+            // Draw all lines for this page using a single offset
+            // The offset moves the drawing origin so the first line of this page appears at y=0
+            let drawOffset = NSPoint(x: 0, y: -firstLineY)
+            
+            // Get the combined glyph range for all lines on this page
+            let pageStartGlyph = lineInfos[startLineIndex].glyphRange.location
+            let pageEndGlyph = NSMaxRange(lineInfos[endLineIndex - 1].glyphRange)
+            let pageGlyphRange = NSRange(location: pageStartGlyph, length: pageEndGlyph - pageStartGlyph)
+            
+            // Draw background and glyphs for all lines on this page at once
+            layoutManager.drawBackground(forGlyphRange: pageGlyphRange, at: drawOffset)
+            layoutManager.drawGlyphs(forGlyphRange: pageGlyphRange, at: drawOffset)
+            
+            NSGraphicsContext.restoreGraphicsState()
+            pdfContext.restoreGState()
+            
+            // Draw page number in footer (centered at bottom)
+            pdfContext.saveGState()
+            let pageNumberText = "Page \(pageIndex + 1) of \(totalPages)"
+            let pageNumberFont = NSFont.systemFont(ofSize: 10)
+            let pageNumberAttributes: [NSAttributedString.Key: Any] = [
+                .font: pageNumberFont,
+                .foregroundColor: NSColor.gray
+            ]
+            let pageNumberString = NSAttributedString(string: pageNumberText, attributes: pageNumberAttributes)
+            let pageNumberSize = pageNumberString.size()
+            
+            // Position for footer: centered horizontally, near bottom
+            let footerX = (pageWidth - pageNumberSize.width) / 2
+            let footerY = marginBottom / 2 - pageNumberSize.height / 2  // Center in bottom margin
+            
+            // Draw page number (need to flip for text drawing)
+            pdfContext.translateBy(x: footerX, y: footerY + pageNumberSize.height)
+            pdfContext.scaleBy(x: 1.0, y: -1.0)
+            
+            let footerContext = NSGraphicsContext(cgContext: pdfContext, flipped: true)
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = footerContext
+            pageNumberString.draw(at: .zero)
+            NSGraphicsContext.restoreGraphicsState()
+            
+            pdfContext.restoreGState()
+            pdfContext.endPDFPage()
+        }
+        
+        pdfContext.closePDF()
+        
+        return pdfData as Data
     }
     
     // MARK: - Export to PNG

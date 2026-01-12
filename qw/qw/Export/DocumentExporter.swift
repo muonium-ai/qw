@@ -205,9 +205,9 @@ class DocumentExporter {
     func exportToPDF(to url: URL) throws {
         let attributedString = createAttributedString()
         
-        // Page size (Letter)
-        let pageWidth: CGFloat = 612
-        let pageHeight: CGFloat = 792
+        // Page size (A4: 210mm x 297mm at 72 DPI)
+        let pageWidth: CGFloat = 595
+        let pageHeight: CGFloat = 842
         let margin: CGFloat = 36
         
         // Generate PDF data and write to file
@@ -222,66 +222,37 @@ class DocumentExporter {
     
     private func generatePDFData(attributedString: NSAttributedString, pageWidth: CGFloat, pageHeight: CGFloat, margin: CGFloat) -> Data {
         let contentWidth = pageWidth - (margin * 2)
-        let contentHeight = pageHeight - (margin * 2)
         
-        let pdfData = NSMutableData()
+        // Use NSTextView's built-in PDF generation which handles coordinate systems correctly
+        let textStorage = NSTextStorage(attributedString: attributedString)
+        let layoutManager = NSLayoutManager()
+        textStorage.addLayoutManager(layoutManager)
         
-        // Create text view for rendering
-        let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: contentWidth, height: contentHeight))
+        let textContainer = NSTextContainer(size: NSSize(width: contentWidth, height: .greatestFiniteMagnitude))
+        textContainer.lineFragmentPadding = 0
+        layoutManager.addTextContainer(textContainer)
+        
+        // Force layout
+        layoutManager.ensureLayout(for: textContainer)
+        let usedRect = layoutManager.usedRect(for: textContainer)
+        
+        // Create a text view sized to fit all content
+        let textView = NSTextView(frame: NSRect(x: margin, y: margin, width: contentWidth, height: usedRect.height))
         textView.textStorage?.setAttributedString(attributedString)
         textView.backgroundColor = NSColor(theme.background)
+        textView.drawsBackground = true
         
-        // Calculate total height
-        textView.layoutManager?.ensureLayout(for: textView.textContainer!)
-        let usedRect = textView.layoutManager?.usedRect(for: textView.textContainer!) ?? .zero
+        // Create a container view with background that includes margins
+        let containerHeight = usedRect.height + (margin * 2)
+        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: pageWidth, height: containerHeight))
+        containerView.wantsLayer = true
+        containerView.layer?.backgroundColor = NSColor(theme.background).cgColor
+        containerView.addSubview(textView)
         
-        // Resize text view to fit all content
-        textView.frame = NSRect(x: 0, y: 0, width: contentWidth, height: usedRect.height)
+        // Use dataWithPDF which handles all coordinate transforms correctly
+        let pdfData = containerView.dataWithPDF(inside: containerView.bounds)
         
-        // Number of pages
-        let totalPages = max(1, Int(ceil(usedRect.height / contentHeight)))
-        
-        // Create PDF
-        var mediaBox = CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight)
-        guard let consumer = CGDataConsumer(data: pdfData as CFMutableData),
-              let pdfContext = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else {
-            return Data()
-        }
-        
-        for pageIndex in 0..<totalPages {
-            let pageInfo: [CFString: Any] = [
-                kCGPDFContextMediaBox: NSValue(rect: mediaBox)
-            ]
-            pdfContext.beginPDFPage(pageInfo as CFDictionary)
-            
-            // Fill background
-            pdfContext.setFillColor(NSColor(theme.background).cgColor)
-            pdfContext.fill(CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight))
-            
-            let nsContext = NSGraphicsContext(cgContext: pdfContext, flipped: false)
-            NSGraphicsContext.saveGraphicsState()
-            NSGraphicsContext.current = nsContext
-            
-            // Calculate which portion of text to draw
-            let yOffset = CGFloat(pageIndex) * contentHeight
-            
-            // Set up transform: move origin to content area and flip for text
-            let transform = NSAffineTransform()
-            transform.translateX(by: margin, yBy: margin + contentHeight)
-            transform.scaleX(by: 1.0, yBy: -1.0)
-            transform.concat()
-            
-            // Draw text for this page
-            textView.frame = NSRect(x: 0, y: -yOffset, width: contentWidth, height: usedRect.height)
-            textView.draw(NSRect(x: 0, y: 0, width: contentWidth, height: contentHeight))
-            
-            NSGraphicsContext.restoreGraphicsState()
-            pdfContext.endPDFPage()
-        }
-        
-        pdfContext.closePDF()
-        
-        return pdfData as Data
+        return pdfData
     }
     
     // MARK: - Export to PNG

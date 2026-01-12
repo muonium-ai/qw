@@ -147,6 +147,12 @@ struct qwApp: App {
                     EditorSettingsManager.shared.showLineNumbers.toggle()
                 }
                 .keyboardShortcut("l", modifiers: [.command, .shift])
+                
+                Toggle("Word Wrap", isOn: Binding(
+                    get: { EditorSettingsManager.shared.wordWrap },
+                    set: { EditorSettingsManager.shared.wordWrap = $0 }
+                ))
+                .keyboardShortcut("w", modifiers: [.command, .option])
             }
         }
         #endif

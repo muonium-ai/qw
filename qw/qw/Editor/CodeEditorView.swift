@@ -76,6 +76,7 @@ struct CodeEditorView: View {
                 fontSize: settings.fontSize,
                 lineHeightMultiple: settings.lineHeight,
                 fontName: settings.selectedFont.fontName,
+                wordWrap: settings.wordWrap,
                 onLineCountChange: { count in
                     lineCount = count
                 },
@@ -88,7 +89,7 @@ struct CodeEditorView: View {
                 }
             )
             .accessibilityIdentifier("codeEditor")
-            .id("\(settings.fontSize)-\(settings.fontName)-\(themeKey)")
+            .id("\(settings.fontSize)-\(settings.fontName)-\(themeKey)-\(settings.wordWrap)")
             #else
             iOSTextEditor(
                 text: $text,
@@ -210,6 +211,7 @@ struct MacOSTextEditor: NSViewRepresentable {
     let fontSize: Double
     let lineHeightMultiple: Double
     let fontName: String
+    let wordWrap: Bool
     let onLineCountChange: (Int) -> Void
     let onScrollChange: (CGFloat, CGFloat, CGFloat) -> Void  // offset, height, lineHeight
     
@@ -272,9 +274,12 @@ struct MacOSTextEditor: NSViewRepresentable {
         
         // Configure text container for proper line height
         textView.textContainer?.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-        textView.textContainer?.widthTracksTextView = true
-        textView.isHorizontallyResizable = false
+        textView.textContainer?.widthTracksTextView = wordWrap
+        textView.isHorizontallyResizable = !wordWrap
         textView.isVerticallyResizable = true
+        
+        // Enable horizontal scrolling when word wrap is off
+        scrollView.hasHorizontalScroller = !wordWrap
         
         textView.textContainerInset = textContainerInset()
         

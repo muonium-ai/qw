@@ -11,9 +11,48 @@ import UniformTypeIdentifiers
 #if os(macOS)
 import AppKit
 
+/// Shared manager for tracking read-only file requests from CLI
+class ReadOnlyFileManager {
+    static let shared = ReadOnlyFileManager()
+    private var readOnlyFiles: Set<String> = []
+    
+    private init() {
+        loadPendingReadOnlyFiles()
+    }
+    
+    private func loadPendingReadOnlyFiles() {
+        // Check if there's a pending read-only files list from CLI
+        if let listPath = UserDefaults.standard.string(forKey: "pendingReadOnlyFiles") {
+            if let contents = try? String(contentsOfFile: listPath, encoding: .utf8) {
+                let files = contents.components(separatedBy: "\n").filter { !$0.isEmpty }
+                readOnlyFiles = Set(files)
+            }
+            // Clear the pending list
+            UserDefaults.standard.removeObject(forKey: "pendingReadOnlyFiles")
+            // Remove the temp file
+            try? FileManager.default.removeItem(atPath: listPath)
+        }
+    }
+    
+    func isReadOnly(url: URL) -> Bool {
+        return readOnlyFiles.contains(url.path)
+    }
+    
+    func markAsReadOnly(url: URL) {
+        readOnlyFiles.insert(url.path)
+    }
+    
+    func removeReadOnly(url: URL) {
+        readOnlyFiles.remove(url.path)
+    }
+}
+
 /// App delegate to handle application lifecycle events
 class QWAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Initialize read-only file manager to check for CLI-passed files
+        _ = ReadOnlyFileManager.shared
+        
         // Create a new document on launch if no documents are open
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             if NSDocumentController.shared.documents.isEmpty {
@@ -40,6 +79,8 @@ struct qwApp: App {
     @FocusedValue(\.documentExportAction) private var documentExportAction
     @FocusedValue(\.documentExportPDFAction) private var documentExportPDFAction
     @FocusedValue(\.documentExportPNGAction) private var documentExportPNGAction
+    @FocusedValue(\.toggleReadOnlyAction) private var toggleReadOnlyAction
+    @FocusedValue(\.isReadOnly) private var isReadOnly
     
     #if os(macOS)
     @NSApplicationDelegateAdaptor(QWAppDelegate.self) var appDelegate
@@ -58,20 +99,31 @@ struct qwApp: App {
         }
         #if os(macOS)
         .commands {
-            // File menu - Print
-            CommandGroup(replacing: .printItem) {
-                Button("Print...") {
-                    if let action = documentPrintAction {
-                        action()
-                    } else {
-                        NSSound.beep()
-                    }
+            // File menu - Open Read Only
+            CommandGroup(after: .newItem) {
+                Button("Open Read Only...") {
+                    openReadOnlyFile()
                 }
-                .keyboardShortcut("p", modifiers: .command)
+                .keyboardShortcut("o", modifiers: [.command, .shift])
             }
             
-            // File menu - Export options
-            CommandGroup(after: .saveItem) {
+            // File menu - Save (disable when read-only)
+            CommandGroup(replacing: .saveItem) {
+                Button("Save") {
+                    // Use standard save action
+                    NSApp.sendAction(#selector(NSDocument.save(_:)), to: nil, from: nil)
+                }
+                .keyboardShortcut("s", modifiers: .command)
+                .disabled(isReadOnly == true)
+                
+                Button("Save As...") {
+                    NSApp.sendAction(#selector(NSDocument.saveAs(_:)), to: nil, from: nil)
+                }
+                .keyboardShortcut("s", modifiers: [.command, .shift])
+                .disabled(isReadOnly == true)
+                
+                Divider()
+                
                 Button("Export As...") {
                     if let action = documentExportAction {
                         action()
@@ -98,6 +150,18 @@ struct qwApp: App {
                         NSSound.beep()
                     }
                 }
+            }
+            
+            // File menu - Print
+            CommandGroup(replacing: .printItem) {
+                Button("Print...") {
+                    if let action = documentPrintAction {
+                        action()
+                    } else {
+                        NSSound.beep()
+                    }
+                }
+                .keyboardShortcut("p", modifiers: .command)
             }
             
             // Find menu
@@ -153,6 +217,13 @@ struct qwApp: App {
                     set: { EditorSettingsManager.shared.wordWrap = $0 }
                 ))
                 .keyboardShortcut("w", modifiers: [.command, .option])
+                
+                Divider()
+                
+                Button(isReadOnly == true ? "✓ Read Only" : "Read Only") {
+                    toggleReadOnlyAction?()
+                }
+                .keyboardShortcut("r", modifiers: [.command, .shift])
             }
         }
         #endif
@@ -164,6 +235,35 @@ struct qwApp: App {
         }
         #endif
     }
+    
+    #if os(macOS)
+    /// Open a file in read-only mode via file picker
+    private func openReadOnlyFile() {
+        let openPanel = NSOpenPanel()
+        openPanel.allowsMultipleSelection = true
+        openPanel.canChooseDirectories = false
+        openPanel.canChooseFiles = true
+        openPanel.allowedContentTypes = TextDocument.readableContentTypes
+        openPanel.message = "Select file(s) to open in read-only mode"
+        openPanel.prompt = "Open Read Only"
+        
+        openPanel.begin { response in
+            if response == .OK {
+                for url in openPanel.urls {
+                    // Mark the file as read-only before opening
+                    ReadOnlyFileManager.shared.markAsReadOnly(url: url)
+                    
+                    // Open the document
+                    NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { _, _, error in
+                        if let error = error {
+                            print("Error opening document: \\(error)")
+                        }
+                    }
+                }
+            }
+        }
+    }
+    #endif
 }
 
 // MARK: - Notifications

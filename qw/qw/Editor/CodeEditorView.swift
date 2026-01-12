@@ -11,6 +11,7 @@ import SwiftUI
 struct CodeEditorView: View {
     @Binding var text: String
     let fileType: SupportedFileType
+    var isReadOnly: Bool = false
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject private var settings = EditorSettingsManager.shared
     
@@ -79,6 +80,7 @@ struct CodeEditorView: View {
                 lineHeightMultiple: settings.lineHeight,
                 fontName: settings.selectedFont.fontName,
                 wordWrap: settings.wordWrap,
+                isReadOnly: isReadOnly,
                 onLineCountChange: { count in
                     lineCount = count
                 },
@@ -136,6 +138,7 @@ struct CodeEditorView: View {
             cursorLine: cursorLine,
             cursorColumn: cursorColumn,
             tabSize: settings.tabWidth,
+            isReadOnly: isReadOnly,
             theme: theme
         )
     }
@@ -152,6 +155,7 @@ struct StatusBarView: View {
     let cursorLine: Int
     let cursorColumn: Int
     let tabSize: Int
+    var isReadOnly: Bool = false
     let theme: SyntaxTheme
     
     private var fileSize: String {
@@ -173,6 +177,11 @@ struct StatusBarView: View {
             HStack(spacing: 12) {
                 Text("\(lineCount) lines")
                 Text(fileSize)
+                if isReadOnly {
+                    Text("Read Only")
+                        .foregroundColor(.orange)
+                        .fontWeight(.medium)
+                }
             }
             
             Spacer()
@@ -283,6 +292,7 @@ struct MacOSTextEditor: NSViewRepresentable {
     let lineHeightMultiple: Double
     let fontName: String
     let wordWrap: Bool
+    var isReadOnly: Bool = false
     let onLineCountChange: (Int) -> Void
     let onScrollChange: (CGFloat, CGFloat, CGFloat) -> Void  // offset, height, lineHeight
     let onCursorChange: (Int, Int) -> Void  // line, column
@@ -326,9 +336,9 @@ struct MacOSTextEditor: NSViewRepresentable {
         let font = getFont()
         
         textView.delegate = context.coordinator
-        textView.isEditable = true
+        textView.isEditable = !isReadOnly
         textView.isSelectable = true
-        textView.allowsUndo = true
+        textView.allowsUndo = !isReadOnly
         textView.isRichText = false
         textView.font = font
         textView.backgroundColor = NSColor(theme.background)
@@ -443,6 +453,12 @@ struct MacOSTextEditor: NSViewRepresentable {
             context.coordinator.theme = theme
         }
         
+        // Update read-only state
+        if context.coordinator.isReadOnly != isReadOnly {
+            context.coordinator.isReadOnly = isReadOnly
+            textView.isEditable = !isReadOnly
+        }
+        
         let currentInset = textView.textContainerInset
         let desiredInset = textContainerInset()
         if currentInset.width != desiredInset.width || currentInset.height != desiredInset.height {
@@ -478,7 +494,9 @@ struct MacOSTextEditor: NSViewRepresentable {
         var themeName: String
         var currentFont: NSFont
         var lineHeightMultiple: Double
+        var isReadOnly: Bool
         private var isUpdating = false
+        private var lastReadOnlyAlertTime: Date = .distantPast
         
         init(_ parent: MacOSTextEditor) {
             self.parent = parent
@@ -487,6 +505,7 @@ struct MacOSTextEditor: NSViewRepresentable {
             self.themeName = parent.themeName
             self.currentFont = parent.getFont()
             self.lineHeightMultiple = parent.lineHeightMultiple
+            self.isReadOnly = parent.isReadOnly
         }
         
         @objc func scrollViewDidScroll(_ notification: Notification) {
@@ -535,6 +554,31 @@ struct MacOSTextEditor: NSViewRepresentable {
         func textViewDidChangeSelection(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             updateCursorPosition(textView: textView)
+        }
+        
+        func textView(_ textView: NSTextView, shouldChangeTextIn affectedCharRange: NSRange, replacementString: String?) -> Bool {
+            // Block edits if in read-only mode
+            if isReadOnly {
+                // Show alert (throttled to avoid spamming)
+                let now = Date()
+                if now.timeIntervalSince(lastReadOnlyAlertTime) > 2.0 {
+                    lastReadOnlyAlertTime = now
+                    showReadOnlyAlert()
+                }
+                return false
+            }
+            return true
+        }
+        
+        private func showReadOnlyAlert() {
+            DispatchQueue.main.async {
+                let alert = NSAlert()
+                alert.messageText = "Read Only"
+                alert.informativeText = "This file is opened in read-only mode. Editing is not allowed."
+                alert.alertStyle = .informational
+                alert.addButton(withTitle: "OK")
+                alert.runModal()
+            }
         }
         
         func updateCursorPosition(textView: NSTextView) {

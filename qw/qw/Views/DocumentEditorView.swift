@@ -16,8 +16,10 @@ import AppKit
 struct DocumentEditorView: View {
     @Binding var document: TextDocument
     var fileURL: URL?
+    var initialReadOnly: Bool = false
     
     @State private var fileType: SupportedFileType = .plainText
+    @State private var isReadOnly: Bool = false
     @StateObject private var searchState = SearchState()
     
     var body: some View {
@@ -36,10 +38,14 @@ struct DocumentEditorView: View {
                         searchState.findPrevious()
                     },
                     onReplace: {
-                        searchState.replace(in: &document.text)
+                        if !isReadOnly {
+                            searchState.replace(in: &document.text)
+                        }
                     },
                     onReplaceAll: {
-                        searchState.replaceAll(in: &document.text)
+                        if !isReadOnly {
+                            searchState.replaceAll(in: &document.text)
+                        }
                     }
                 )
                 .onChange(of: searchState.searchText) { _, _ in
@@ -50,12 +56,27 @@ struct DocumentEditorView: View {
             // Editor
             CodeEditorView(
                 text: $document.text,
-                fileType: fileType
+                fileType: fileType,
+                isReadOnly: isReadOnly
             )
             .accessibilityIdentifier("documentEditor")
         }
         .onAppear {
             updateFileType()
+            // Check if this file was opened in read-only mode from CLI
+            if let url = fileURL {
+                #if os(macOS)
+                if ReadOnlyFileManager.shared.isReadOnly(url: url) {
+                    isReadOnly = true
+                } else {
+                    isReadOnly = initialReadOnly
+                }
+                #else
+                isReadOnly = initialReadOnly
+                #endif
+            } else {
+                isReadOnly = initialReadOnly
+            }
         }
         .onChange(of: fileURL) { _, _ in
             updateFileType()
@@ -78,6 +99,8 @@ struct DocumentEditorView: View {
         .focusedSceneValue(\.documentPrintAction, { printDocument() })
         .focusedSceneValue(\.documentExportPDFAction, { exportAsPDF() })
         .focusedSceneValue(\.documentExportPNGAction, { exportAsPNG() })
+        .focusedSceneValue(\.toggleReadOnlyAction, { isReadOnly.toggle() })
+        .focusedSceneValue(\.isReadOnly, isReadOnly)
         #endif
     }
     
@@ -185,6 +208,14 @@ struct DocumentExportPNGActionFocusKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
+struct ToggleReadOnlyActionFocusKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
+struct IsReadOnlyFocusKey: FocusedValueKey {
+    typealias Value = Bool
+}
+
 extension FocusedValues {
     var searchState: SearchState? {
         get { self[SearchStateFocusKey.self] }
@@ -209,6 +240,16 @@ extension FocusedValues {
     var documentExportPNGAction: (() -> Void)? {
         get { self[DocumentExportPNGActionFocusKey.self] }
         set { self[DocumentExportPNGActionFocusKey.self] = newValue }
+    }
+    
+    var toggleReadOnlyAction: (() -> Void)? {
+        get { self[ToggleReadOnlyActionFocusKey.self] }
+        set { self[ToggleReadOnlyActionFocusKey.self] = newValue }
+    }
+    
+    var isReadOnly: Bool? {
+        get { self[IsReadOnlyFocusKey.self] }
+        set { self[IsReadOnlyFocusKey.self] = newValue }
     }
 }
 

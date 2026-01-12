@@ -134,6 +134,13 @@ qw file.txt
 qw .
 ```
 
+- Open a file in read-only mode:
+
+```bash
+qw -r file.txt
+qw --readonly config.json
+```
+
 - Export a file (CLI fallback exporters):
 
 ```bash

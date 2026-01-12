@@ -18,6 +18,8 @@ struct CodeEditorView: View {
     @State private var scrollOffset: CGFloat = 0
     @State private var contentHeight: CGFloat = 0
     @State private var actualLineHeight: CGFloat = 0
+    @State private var cursorLine: Int = 1
+    @State private var cursorColumn: Int = 1
     
     private var theme: SyntaxTheme {
         settings.syntaxTheme(for: colorScheme)
@@ -86,6 +88,10 @@ struct CodeEditorView: View {
                     if lineHeight > 0 {
                         actualLineHeight = lineHeight
                     }
+                },
+                onCursorChange: { line, column in
+                    cursorLine = line
+                    cursorColumn = column
                 }
             )
             .accessibilityIdentifier("codeEditor")
@@ -122,10 +128,75 @@ struct CodeEditorView: View {
         .onChange(of: text) { _, _ in
             updateLineCount()
         }
+        
+        // Status bar
+        StatusBarView(
+            text: text,
+            lineCount: lineCount,
+            cursorLine: cursorLine,
+            cursorColumn: cursorColumn,
+            tabSize: settings.tabWidth,
+            theme: theme
+        )
     }
     
     private func updateLineCount() {
         lineCount = max(1, text.components(separatedBy: "\n").count)
+    }
+}
+
+/// Status bar showing file info, cursor position, etc.
+struct StatusBarView: View {
+    let text: String
+    let lineCount: Int
+    let cursorLine: Int
+    let cursorColumn: Int
+    let tabSize: Int
+    let theme: SyntaxTheme
+    
+    private var fileSize: String {
+        let bytes = text.utf8.count
+        if bytes < 1024 {
+            return "\(bytes) B"
+        } else if bytes < 1024 * 1024 {
+            let kb = Double(bytes) / 1024.0
+            return String(format: "%.1f KB", kb)
+        } else {
+            let mb = Double(bytes) / (1024.0 * 1024.0)
+            return String(format: "%.2f MB", mb)
+        }
+    }
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            // Left side - file info
+            HStack(spacing: 12) {
+                Text("\(lineCount) lines")
+                Text(fileSize)
+            }
+            
+            Spacer()
+            
+            // Right side - cursor position, tab size, encoding
+            HStack(spacing: 12) {
+                Text("Ln \(cursorLine), Col \(cursorColumn)")
+                Divider().frame(height: 12)
+                Text("Tab Size: \(tabSize)")
+                Divider().frame(height: 12)
+                Text("UTF-8")
+            }
+        }
+        .font(.system(size: 11))
+        .foregroundColor(theme.lineNumber)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+        .background(theme.background.opacity(0.8))
+        .overlay(
+            Rectangle()
+                .frame(height: 1)
+                .foregroundColor(theme.lineNumber.opacity(0.3)),
+            alignment: .top
+        )
     }
 }
 
@@ -214,6 +285,7 @@ struct MacOSTextEditor: NSViewRepresentable {
     let wordWrap: Bool
     let onLineCountChange: (Int) -> Void
     let onScrollChange: (CGFloat, CGFloat, CGFloat) -> Void  // offset, height, lineHeight
+    let onCursorChange: (Int, Int) -> Void  // line, column
     
     private func textContainerInset() -> NSSize {
         let insetHeight = max(4, CGFloat(fontSize * 1.5))
@@ -298,6 +370,9 @@ struct MacOSTextEditor: NSViewRepresentable {
         // Report initial line count
         let lineCount = text.components(separatedBy: "\n").count
         onLineCountChange(lineCount)
+        
+        // Report initial cursor position
+        context.coordinator.updateCursorPosition(textView: textView)
         
         // Apply syntax highlighting
         context.coordinator.applySyntaxHighlighting(to: textView)
@@ -450,8 +525,48 @@ struct MacOSTextEditor: NSViewRepresentable {
             let lineCount = textView.string.components(separatedBy: "\n").count
             parent.onLineCountChange(lineCount)
             
+            // Update cursor position
+            updateCursorPosition(textView: textView)
+            
             // Apply syntax highlighting
             applySyntaxHighlighting(to: textView)
+        }
+        
+        func textViewDidChangeSelection(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            updateCursorPosition(textView: textView)
+        }
+        
+        func updateCursorPosition(textView: NSTextView) {
+            let text = textView.string
+            let selectedRange = textView.selectedRange()
+            let cursorPosition = selectedRange.location
+            
+            // Calculate line and column
+            var line = 1
+            var column = 1
+            var currentIndex = 0
+            
+            for (index, char) in text.enumerated() {
+                if index >= cursorPosition {
+                    break
+                }
+                if char == "\n" {
+                    line += 1
+                    column = 1
+                } else {
+                    column += 1
+                }
+                currentIndex = index + 1
+            }
+            
+            // Handle cursor at end of text
+            if cursorPosition == text.count && text.last == "\n" {
+                line += 1
+                column = 1
+            }
+            
+            parent.onCursorChange(line, column)
         }
         
         func applySyntaxHighlighting(to textView: NSTextView) {

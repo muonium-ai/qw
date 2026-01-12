@@ -85,18 +85,23 @@ class DocumentExporter {
         let highlighter = SyntaxHighlighter(fileType: fileType, theme: theme)
         let font = getFont()
         
-        // Calculate line number width
-        let lineNumberWidth: CGFloat = includeLineNumbers ? 50 : 0
+        // Calculate line number width based on max digits needed
         let lineCount = lines.count
         let maxLineDigits = String(lineCount).count
+        // Estimate width: each digit ~7pt at 12pt font, plus 2 spaces padding
+        let lineNumberWidth: CGFloat = includeLineNumbers ? CGFloat(maxLineDigits + 2) * (fontSize * 0.6) : 0
         
         // Pre-compute colors to avoid repeated conversion
         let plainColor = nsColor(from: theme.plain)
         let lineNumberColor = nsColor(from: theme.lineNumber)
         
-        // Paragraph style for line spacing
+        // Paragraph style for line spacing and proper wrapping
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineSpacing = 4
+        // Set headIndent so wrapped lines start after line number area
+        if includeLineNumbers {
+            paragraphStyle.headIndent = lineNumberWidth
+        }
         
         for (index, line) in lines.enumerated() {
             // Add line number if enabled
@@ -205,7 +210,7 @@ class DocumentExporter {
     // MARK: - PDF Export Configuration
     
     /// Number of lines per page in PDF export (adjust as needed)
-    private let pdfLinesPerPage: Int = 25
+    private let pdfLinesPerPage: Int = 28
     
     func exportToPDF(to url: URL) throws {
         let attributedString = createAttributedString()

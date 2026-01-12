@@ -230,6 +230,7 @@ build: build-mac
 #------------------------------------------------------------------------------
 deploy-mac: build-mac
 	@echo "$(YELLOW)Deploying to macOS...$(NC)"
+	@killall qw 2>/dev/null || true
 	@APP_PATH=$$(find $(DERIVED_DATA) -name "$(PROJECT_NAME).app" -path "*/Release/*" | head -1) && \
 	if [ -n "$$APP_PATH" ]; then \
 		open "$$APP_PATH"; \

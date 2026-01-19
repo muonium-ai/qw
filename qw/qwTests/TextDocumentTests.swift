@@ -6,6 +6,7 @@
 //
 
 import XCTest
+import SwiftUI
 import UniformTypeIdentifiers
 @testable import qw
 
@@ -69,6 +70,17 @@ final class TextDocumentTests: XCTestCase {
         XCTAssertEqual(SupportedFileType.from(extension: "TXT"), .plainText)
         XCTAssertEqual(SupportedFileType.from(extension: "MD"), .markdown)
         XCTAssertEqual(SupportedFileType.from(extension: "JSON"), .json)
+    }
+
+    func testReadNonUTF8DataExpectedToSucceed() throws {
+        // Issue #3: Non-UTF-8 files should be supported (currently fails).
+        let latin1Bytes: [UInt8] = [0x63, 0x61, 0x66, 0xE9] // "café" in ISO-8859-1
+        let data = Data(latin1Bytes)
+        let wrapper = FileWrapper(regularFileWithContents: data)
+        let config = TextDocument.ReadConfiguration(file: wrapper, contentType: .plainText)
+
+        XCTExpectFailure("Issue #3: Non-UTF-8 files should open without throwing")
+        XCTAssertNoThrow(try TextDocument(configuration: config))
     }
     
     // MARK: - UTType Tests

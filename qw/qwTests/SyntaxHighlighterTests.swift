@@ -56,4 +56,40 @@ final class SyntaxHighlighterTests: XCTestCase {
         
         XCTAssertEqual(tokenTypes.count, 15)
     }
+
+    private func rangesOverlap(_ lhs: Range<String.Index>, _ rhs: Range<String.Index>) -> Bool {
+        lhs.lowerBound < rhs.upperBound && rhs.lowerBound < lhs.upperBound
+    }
+
+    func testCommentShouldNotContainStringTokens_JavaScript() {
+        let text = "// \"string inside comment\""
+        let highlighter = SyntaxHighlighter(fileType: .javascript, theme: .dark)
+        let tokens = highlighter.tokenize(text)
+
+        let commentRanges = tokens.filter { $0.type == .comment }.map { $0.range }
+        let stringRanges = tokens.filter { $0.type == .string }.map { $0.range }
+
+        let hasOverlap = commentRanges.contains { commentRange in
+            stringRanges.contains { rangesOverlap(commentRange, $0) }
+        }
+
+        XCTExpectFailure("Issue #17: Token ranges overlap (string tokens inside comments)")
+        XCTAssertFalse(hasOverlap)
+    }
+
+    func testCommentShouldNotContainStringTokens_Python() {
+        let text = "# 'string inside comment'"
+        let highlighter = SyntaxHighlighter(fileType: .python, theme: .dark)
+        let tokens = highlighter.tokenize(text)
+
+        let commentRanges = tokens.filter { $0.type == .comment }.map { $0.range }
+        let stringRanges = tokens.filter { $0.type == .string }.map { $0.range }
+
+        let hasOverlap = commentRanges.contains { commentRange in
+            stringRanges.contains { rangesOverlap(commentRange, $0) }
+        }
+
+        XCTExpectFailure("Issue #17: Token ranges overlap (string tokens inside comments)")
+        XCTAssertFalse(hasOverlap)
+    }
 }

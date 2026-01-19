@@ -143,12 +143,11 @@ Date: 2026-01-19
 
 ## Pre-Release Checklist
 
-- [ ] Fix critical build settings (Target 26.1 -> 13.0)
-- [ ] Fix all **High** severity code issues (#1, #2, #18)
-- [ ] Fix Permission/Install issues in Makefile (#19)
+- [ ] Fix all **High** severity code issues 
+- [ ] Fix Permission/Install issues in Makefile (#18)
 - [ ] Implement missing read-only support for iOS (#11)
 - [ ] Ensure `App` doesn't leak memory (NotificationCenter #6)
-- [ ] Decide on duplicate code strategy (#20)
+- [ ] Decide on duplicate code strategy (#19)
 - [ ] Clean up unused files (#7)
 - [ ] Verify entitlements (#8)
 - [ ] Regression test all features

@@ -9,6 +9,7 @@
 //
 
 import XCTest
+@testable import qw
 
 #if os(macOS)
 import AppKit
@@ -66,6 +67,25 @@ final class DocumentExporterTests: XCTestCase {
         
         let readContent = try String(contentsOf: testURL, encoding: .utf8)
         XCTAssertEqual(readContent, testContent)
+    }
+
+    func testPNGExportCreatesFile() throws {
+        let exporter = DocumentExporter(
+            text: "print(\"hello\")\n",
+            fileType: .swift,
+            theme: .dark,
+            includeLineNumbers: false,
+            fontSize: 12,
+            fontName: "Menlo"
+        )
+
+        let outputURL = tempDirectory.appendingPathComponent("export.png")
+        try exporter.exportToPNG(to: outputURL)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: outputURL.path))
+        let attrs = try FileManager.default.attributesOfItem(atPath: outputURL.path)
+        let size = attrs[.size] as? Int ?? 0
+        XCTAssertGreaterThan(size, 0)
     }
 }
 #endif

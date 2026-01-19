@@ -296,6 +296,12 @@ struct MacOSTextEditor: NSViewRepresentable {
     let onLineCountChange: (Int) -> Void
     let onScrollChange: (CGFloat, CGFloat, CGFloat) -> Void  // offset, height, lineHeight
     let onCursorChange: (Int, Int) -> Void  // line, column
+
+    static func applyWordWrap(_ wordWrap: Bool, to textView: NSTextView, scrollView: NSScrollView) {
+        textView.textContainer?.widthTracksTextView = wordWrap
+        textView.isHorizontallyResizable = !wordWrap
+        scrollView.hasHorizontalScroller = !wordWrap
+    }
     
     private func textContainerInset() -> NSSize {
         let insetHeight = max(4, CGFloat(fontSize * 1.5))
@@ -356,12 +362,10 @@ struct MacOSTextEditor: NSViewRepresentable {
         
         // Configure text container for proper line height
         textView.textContainer?.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-        textView.textContainer?.widthTracksTextView = wordWrap
-        textView.isHorizontallyResizable = !wordWrap
         textView.isVerticallyResizable = true
-        
-        // Enable horizontal scrolling when word wrap is off
-        scrollView.hasHorizontalScroller = !wordWrap
+
+        // Apply word wrap and horizontal scrolling
+        MacOSTextEditor.applyWordWrap(wordWrap, to: textView, scrollView: scrollView)
         
         textView.textContainerInset = textContainerInset()
         
@@ -461,9 +465,7 @@ struct MacOSTextEditor: NSViewRepresentable {
         // Update word wrap and horizontal scrolling
         if context.coordinator.wordWrap != wordWrap {
             context.coordinator.wordWrap = wordWrap
-            textView.textContainer?.widthTracksTextView = wordWrap
-            textView.isHorizontallyResizable = !wordWrap
-            scrollView.hasHorizontalScroller = !wordWrap
+            MacOSTextEditor.applyWordWrap(wordWrap, to: textView, scrollView: scrollView)
         }
         
         let currentInset = textView.textContainerInset

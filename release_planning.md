@@ -123,21 +123,16 @@ Date: 2026-01-19
 - **Notes:** Applying attributes sequentially based on simplistic regex without token merging logic leads to artifacts (e.g., string color inside a comment).
 - **Proposed fix:** Implement a scanner/lexer that produces a non-overlapping stream of tokens, or sort and merge ranges carefully.
 
-### 18) Incorrect deployment target in project file (26.1)
-- **Severity:** High
-- **Impact:** Build may fail or produce binary compatible only with imaginary OS versions.
-- **Observed in:** [qw/qw.xcodeproj/project.pbxproj](qw/qw.xcodeproj/project.pbxproj)
-- **Notes:** `MACOSX_DEPLOYMENT_TARGET = 26.1` is invalid (current max ~15.x).
-- **Proposed fix:** Set `MACOSX_DEPLOYMENT_TARGET` to `12.0` or `13.0` to match PRD "Native Performance" on recent Macs.
 
-### 19) Makefile install targets fail on permissions
+
+### 18) Makefile install targets fail on permissions
 - **Severity:** Medium
 - **Impact:** `make install` fails with "Permission denied".
 - **Observed in:** [Makefile](Makefile)
 - **Notes:** Writes to `/Applications` and `/usr/local/bin` without sudo handling.
 - **Proposed fix:** Add `sudo` to commands or partial error handling; instructions to run with sudo.
 
-### 20) Duplicate syntax/theme code not shared between App and Export tool
+### 19) Duplicate syntax/theme code not shared between App and Export tool
 - **Severity:** Low (Maintenance)
 - **Impact:** Fixes in app (e.g., regex) are not reflected in CLI exporter.
 - **Observed in:** [qw-export/Sources/qw-export.swift](qw-export/Sources/qw-export.swift) vs [qw/qw/Editor/SyntaxHighlighter.swift](qw/qw/Editor/SyntaxHighlighter.swift)

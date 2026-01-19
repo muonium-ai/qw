@@ -403,7 +403,7 @@ class DocumentExporter {
         let height = usedRect.height + (padding * 2)
         
         // Create bitmap
-        let bitmapRep = NSBitmapImageRep(
+        guard let bitmapRep = NSBitmapImageRep(
             bitmapDataPlanes: nil,
             pixelsWide: Int(width * 2), // 2x for retina
             pixelsHigh: Int(height * 2),
@@ -414,7 +414,9 @@ class DocumentExporter {
             colorSpaceName: .deviceRGB,
             bytesPerRow: 0,
             bitsPerPixel: 0
-        )!
+        ) else {
+            throw ExportError.pngCreationFailed
+        }
         
         bitmapRep.size = NSSize(width: width, height: height)
         

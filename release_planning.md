@@ -17,6 +17,7 @@ Date: 2026-01-19
 - **Observed in:** [qw/qw/Export/DocumentExporter.swift](qw/qw/Export/DocumentExporter.swift#L404-L418)
 - **Notes:** `NSBitmapImageRep(...)!` can return nil.
 - **Proposed fix:** Replace force unwrap with guard and surface `ExportError.pngCreationFailed`.
+- **Status:** Fixed on 2026-01-19 (guarded allocation, throws `ExportError.pngCreationFailed`).
 
 ### 3) UTF-8 only read + force unwrap on write
 - **Severity:** Medium

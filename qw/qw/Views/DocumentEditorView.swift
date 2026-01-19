@@ -60,13 +60,18 @@ struct DocumentEditorView: View {
                 isReadOnly: isReadOnly
             )
             .accessibilityIdentifier("documentEditor")
+            #if os(macOS)
+            .background(WindowTitleModeUpdater(isReadOnly: isReadOnly))
+            #endif
         }
         .onAppear {
             updateFileType()
             // Check if this file was opened in read-only mode from CLI
             if let url = fileURL {
                 #if os(macOS)
-                if ReadOnlyFileManager.shared.isReadOnly(url: url) {
+                if ReadOnlyFileManager.shared.isWritable(url: url) {
+                    isReadOnly = false
+                } else if ReadOnlyFileManager.shared.isReadOnly(url: url) {
                     isReadOnly = true
                 } else {
                     isReadOnly = initialReadOnly
@@ -75,7 +80,8 @@ struct DocumentEditorView: View {
                 isReadOnly = initialReadOnly
                 #endif
             } else {
-                isReadOnly = initialReadOnly
+                // New untitled documents should start writable
+                isReadOnly = false
             }
         }
         .onChange(of: fileURL) { _, _ in
@@ -103,6 +109,45 @@ struct DocumentEditorView: View {
         .focusedSceneValue(\.isReadOnly, isReadOnly)
         #endif
     }
+
+        #if os(macOS)
+        private struct WindowTitleModeUpdater: NSViewRepresentable {
+            let isReadOnly: Bool
+
+            func makeNSView(context: Context) -> NSView {
+                let view = NSView(frame: .zero)
+                DispatchQueue.main.async {
+                    updateWindowTitle(for: view.window)
+                }
+                return view
+            }
+
+            func updateNSView(_ nsView: NSView, context: Context) {
+                DispatchQueue.main.async {
+                    updateWindowTitle(for: nsView.window)
+                }
+            }
+
+            private func updateWindowTitle(for window: NSWindow?) {
+                guard let window = window else { return }
+                let modeText = isReadOnly ? "Read Only" : "Write"
+                if #available(macOS 11.0, *) {
+                    window.subtitle = modeText
+                } else {
+                    let baseTitle = stripModeSuffix(from: window.title)
+                    window.title = "\(baseTitle) — \(modeText)"
+                }
+            }
+
+            private func stripModeSuffix(from title: String) -> String {
+                let suffixes = [" — Read Only", " — Write"]
+                for suffix in suffixes where title.hasSuffix(suffix) {
+                    return String(title.dropLast(suffix.count))
+                }
+                return title
+            }
+        }
+        #endif
     
     private func updateFileType() {
         if let url = fileURL {

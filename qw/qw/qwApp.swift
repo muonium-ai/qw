@@ -15,6 +15,7 @@ import AppKit
 class ReadOnlyFileManager {
     static let shared = ReadOnlyFileManager()
     private var readOnlyFiles: Set<String> = []
+    private var writableFiles: Set<String> = []
     
     private init() {
         loadPendingReadOnlyFiles()
@@ -37,13 +38,27 @@ class ReadOnlyFileManager {
     func isReadOnly(url: URL) -> Bool {
         return readOnlyFiles.contains(url.path)
     }
+
+    func isWritable(url: URL) -> Bool {
+        return writableFiles.contains(url.path)
+    }
     
     func markAsReadOnly(url: URL) {
         readOnlyFiles.insert(url.path)
+        writableFiles.remove(url.path)
+    }
+
+    func markAsWritable(url: URL) {
+        writableFiles.insert(url.path)
+        readOnlyFiles.remove(url.path)
     }
     
     func removeReadOnly(url: URL) {
         readOnlyFiles.remove(url.path)
+    }
+
+    func removeWritable(url: URL) {
+        writableFiles.remove(url.path)
     }
 }
 
@@ -91,7 +106,8 @@ struct qwApp: App {
         DocumentGroup(newDocument: TextDocument()) { file in
             DocumentEditorView(
                 document: file.$document,
-                fileURL: file.fileURL
+                fileURL: file.fileURL,
+                initialReadOnly: true
             )
             #if os(macOS)
             .frame(minWidth: 600, minHeight: 400)
@@ -99,10 +115,10 @@ struct qwApp: App {
         }
         #if os(macOS)
         .commands {
-            // File menu - Open Read Only
+            // File menu - Open Writable (default is read-only)
             CommandGroup(after: .newItem) {
-                Button("Open Read Only...") {
-                    openReadOnlyFile()
+                Button("Open Writable...") {
+                    openWritableFile()
                 }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
             }
@@ -238,20 +254,20 @@ struct qwApp: App {
     
     #if os(macOS)
     /// Open a file in read-only mode via file picker
-    private func openReadOnlyFile() {
+    private func openWritableFile() {
         let openPanel = NSOpenPanel()
         openPanel.allowsMultipleSelection = true
         openPanel.canChooseDirectories = false
         openPanel.canChooseFiles = true
         openPanel.allowedContentTypes = TextDocument.readableContentTypes
-        openPanel.message = "Select file(s) to open in read-only mode"
-        openPanel.prompt = "Open Read Only"
+        openPanel.message = "Select file(s) to open in write mode"
+        openPanel.prompt = "Open Writable"
         
         openPanel.begin { response in
             if response == .OK {
                 for url in openPanel.urls {
-                    // Mark the file as read-only before opening
-                    ReadOnlyFileManager.shared.markAsReadOnly(url: url)
+                    // Mark the file as writable before opening
+                    ReadOnlyFileManager.shared.markAsWritable(url: url)
                     
                     // Open the document
                     NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { _, _, error in

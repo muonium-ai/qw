@@ -38,3 +38,60 @@ Date: 2026-01-19
 - **Observed in:** [qw/qw/Export/DocumentExporter.swift](qw/qw/Export/DocumentExporter.swift#L458-L515)
 - **Notes:** Save panel completion runs export on the main thread and prints paths.
 - **Proposed fix:** Dispatch export to a background queue and report completion on main; gate logs behind a debug flag or remove for release.
+
+### 6) NotificationCenter observer never removed (potential memory leak)
+- **Severity:** Medium
+- **Impact:** Coordinator may leak or receive spurious scroll notifications after the view is removed.
+- **Observed in:** [qw/qw/Editor/CodeEditorView.swift](qw/qw/Editor/CodeEditorView.swift#L401-L406)
+- **Notes:** `NotificationCenter.default.addObserver` is called in `makeNSView`, but there is no `deinit` or `dismantleNSView` to call `removeObserver`.
+- **Proposed fix:** Add a `deinit` to the `Coordinator` that calls `NotificationCenter.default.removeObserver(self)`.
+
+### 7) Unused SwiftData boilerplate (ContentView.swift, Item.swift)
+- **Severity:** Low
+- **Impact:** Code clutter; unused SwiftData model adds to binary size and confusion.
+- **Observed in:** [qw/qw/ContentView.swift](qw/qw/ContentView.swift), [qw/qw/Item.swift](qw/qw/Item.swift)
+- **Notes:** These files appear to be Xcode template leftovers and are not used by the app.
+- **Proposed fix:** Remove `ContentView.swift` and `Item.swift` if they are not needed.
+
+### 8) iCloud entitlements present but no iCloud sync implemented
+- **Severity:** Low
+- **Impact:** App may prompt user for iCloud access that is never used; may cause App Store review issues.
+- **Observed in:** [qw/qw/qw.entitlements](qw/qw/qw.entitlements)
+- **Notes:** iCloud container identifiers and CloudDocuments entitlements are declared but unused.
+- **Proposed fix:** Remove iCloud entitlements if iCloud sync is not planned for v1; or implement iCloud document sync.
+
+### 9) Search/Replace does not highlight current match in editor
+- **Severity:** Low
+- **Impact:** User cannot visually locate the current match in the document; only match count is shown.
+- **Observed in:** [qw/qw/Views/SearchReplaceView.swift](qw/qw/Views/SearchReplaceView.swift), [qw/qw/Views/DocumentEditorView.swift](qw/qw/Views/DocumentEditorView.swift)
+- **Notes:** `SearchState` tracks `matches` and `currentMatchIndex`, but the editor does not scroll to or highlight the match.
+- **Proposed fix:** Scroll the text view to the current match range and apply a highlight (e.g. selection or background color).
+
+### 10) Accessibility labels missing for key elements
+- **Severity:** Low
+- **Impact:** VoiceOver users may have difficulty understanding controls.
+- **Observed in:** Various views
+- **Notes:** Only `accessibilityIdentifier` is set (for UI testing); `accessibilityLabel` and `accessibilityHint` are missing on buttons and fields.
+- **Proposed fix:** Add `.accessibilityLabel()` and `.accessibilityHint()` to interactive elements.
+
+### 11) iOS build incomplete / iOSTextEditor lacks read-only support
+- **Severity:** Low (if macOS-only release)
+- **Impact:** iOS version would allow editing even when read-only is intended.
+- **Observed in:** [qw/qw/Editor/CodeEditorView.swift](qw/qw/Editor/CodeEditorView.swift#L678-L880)
+- **Notes:** `iOSTextEditor` does not accept or enforce `isReadOnly`.
+- **Proposed fix:** Add `isReadOnly` parameter to `iOSTextEditor` and disable editing when true.
+
+---
+
+## Pre-Release Checklist
+
+- [ ] Fix all **High** severity issues
+- [ ] Fix all **Medium** severity issues (or document as known limitations)
+- [ ] Review and decide on **Low** severity items
+- [ ] Remove or guard all debug `print` statements
+- [ ] Test on macOS 12, 13, 14, 15
+- [ ] Test with VoiceOver enabled
+- [ ] Test with large files (1 MB+)
+- [ ] Verify sandbox entitlements are minimal
+- [ ] Update version number and build number
+- [ ] Create release notes

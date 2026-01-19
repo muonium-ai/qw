@@ -388,7 +388,6 @@ struct MacOSTextEditor: NSViewRepresentable {
         context.coordinator.applySyntaxHighlighting(to: textView)
         
         scrollView.hasVerticalScroller = true
-        scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
         scrollView.backgroundColor = NSColor(theme.background)
         scrollView.drawsBackground = true
@@ -458,6 +457,14 @@ struct MacOSTextEditor: NSViewRepresentable {
             context.coordinator.isReadOnly = isReadOnly
             textView.isEditable = !isReadOnly
         }
+
+        // Update word wrap and horizontal scrolling
+        if context.coordinator.wordWrap != wordWrap {
+            context.coordinator.wordWrap = wordWrap
+            textView.textContainer?.widthTracksTextView = wordWrap
+            textView.isHorizontallyResizable = !wordWrap
+            scrollView.hasHorizontalScroller = !wordWrap
+        }
         
         let currentInset = textView.textContainerInset
         let desiredInset = textContainerInset()
@@ -494,6 +501,7 @@ struct MacOSTextEditor: NSViewRepresentable {
         var themeName: String
         var currentFont: NSFont
         var lineHeightMultiple: Double
+        var wordWrap: Bool
         var isReadOnly: Bool
         private var isUpdating = false
         private var lastReadOnlyAlertTime: Date = .distantPast
@@ -506,6 +514,7 @@ struct MacOSTextEditor: NSViewRepresentable {
             self.currentFont = parent.getFont()
             self.lineHeightMultiple = parent.lineHeightMultiple
             self.isReadOnly = parent.isReadOnly
+            self.wordWrap = parent.wordWrap
         }
         
         @objc func scrollViewDidScroll(_ notification: Notification) {

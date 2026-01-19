@@ -81,6 +81,41 @@ Date: 2026-01-19
 - **Notes:** `iOSTextEditor` does not accept or enforce `isReadOnly`.
 - **Proposed fix:** Add `isReadOnly` parameter to `iOSTextEditor` and disable editing when true.
 
+### 12) App automatically creates untitled document on launch
+- **Severity:** Low
+- **Impact:** Users may not want an empty document created automatically.
+- **Observed in:** [qw/qw/qwApp.swift](qw/qw/qwApp.swift#L72-76)
+- **Notes:** `QWAppDelegate.applicationDidFinishLaunching` creates a new document if none are open.
+- **Proposed fix:** Remove the automatic document creation or make it optional via settings.
+
+### 13) No version information displayed in app
+- **Severity:** Low
+- **Impact:** Users cannot check the app version from within the app.
+- **Observed in:** No version display in UI.
+- **Notes:** App lacks an "About" window or version info in settings.
+- **Proposed fix:** Add an "About QW" menu item or settings section showing version from Info.plist.
+
+### 14) CLI export error handling incomplete
+- **Severity:** Medium
+- **Impact:** CLI exports may fail silently or with unclear errors.
+- **Observed in:** [cli/qw](cli/qw), [qw-export/main.swift](qw-export/main.swift)
+- **Notes:** CLI scripts use `try` but may not surface errors properly to user.
+- **Proposed fix:** Improve error messages and exit codes in CLI tools.
+
+### 15) Syntax highlighter may not handle all edge cases
+- **Severity:** Low
+- **Impact:** Some code may not highlight correctly.
+- **Observed in:** [qw/qw/Editor/SyntaxHighlighter.swift](qw/qw/Editor/SyntaxHighlighter.swift)
+- **Notes:** Regex-based highlighting may miss complex syntax or multi-line constructs.
+- **Proposed fix:** Test with various code samples and refine regex patterns if needed.
+
+### 16) Large file performance degradation
+- **Severity:** Medium
+- **Impact:** App may become unresponsive with very large files (>10MB).
+- **Observed in:** Syntax highlighting skips large files, but scrolling/rendering may still lag.
+- **Notes:** NSTextView handles large files, but highlighting and UI updates may cause issues.
+- **Proposed fix:** Add file size warnings or disable features for large files.
+
 ---
 
 ## Pre-Release Checklist
@@ -95,3 +130,7 @@ Date: 2026-01-19
 - [ ] Verify sandbox entitlements are minimal
 - [ ] Update version number and build number
 - [ ] Create release notes
+- [ ] Test CLI tools on various systems
+- [ ] Verify app icon and assets are complete
+- [ ] Check for localization needs
+

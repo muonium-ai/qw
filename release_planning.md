@@ -116,21 +116,49 @@ Date: 2026-01-19
 - **Notes:** NSTextView handles large files, but highlighting and UI updates may cause issues.
 - **Proposed fix:** Add file size warnings or disable features for large files.
 
+### 17) Syntax highlighting overlaps/priority issues
+- **Severity:** Low
+- **Impact:** Tokens found later (e.g., strings) overwrite earlier ones (e.g., comments) regardless of logic.
+- **Observed in:** [qw/qw/Editor/SyntaxHighlighter.swift](qw/qw/Editor/SyntaxHighlighter.swift), [qw-export/Sources/qw-export.swift](qw-export/Sources/qw-export.swift)
+- **Notes:** Applying attributes sequentially based on simplistic regex without token merging logic leads to artifacts (e.g., string color inside a comment).
+- **Proposed fix:** Implement a scanner/lexer that produces a non-overlapping stream of tokens, or sort and merge ranges carefully.
+
+### 18) Incorrect deployment target in project file (26.1)
+- **Severity:** High
+- **Impact:** Build may fail or produce binary compatible only with imaginary OS versions.
+- **Observed in:** [qw/qw.xcodeproj/project.pbxproj](qw/qw.xcodeproj/project.pbxproj)
+- **Notes:** `MACOSX_DEPLOYMENT_TARGET = 26.1` is invalid (current max ~15.x).
+- **Proposed fix:** Set `MACOSX_DEPLOYMENT_TARGET` to `12.0` or `13.0` to match PRD "Native Performance" on recent Macs.
+
+### 19) Makefile install targets fail on permissions
+- **Severity:** Medium
+- **Impact:** `make install` fails with "Permission denied".
+- **Observed in:** [Makefile](Makefile)
+- **Notes:** Writes to `/Applications` and `/usr/local/bin` without sudo handling.
+- **Proposed fix:** Add `sudo` to commands or partial error handling; instructions to run with sudo.
+
+### 20) Duplicate syntax/theme code not shared between App and Export tool
+- **Severity:** Low (Maintenance)
+- **Impact:** Fixes in app (e.g., regex) are not reflected in CLI exporter.
+- **Observed in:** [qw-export/Sources/qw-export.swift](qw-export/Sources/qw-export.swift) vs [qw/qw/Editor/SyntaxHighlighter.swift](qw/qw/Editor/SyntaxHighlighter.swift)
+- **Notes:** `qw-export` is a standalone script that duplicates the app's logic.
+- **Proposed fix:** Extract core logic into a shared Swift package or framework used by both targets.
+
 ---
 
 ## Pre-Release Checklist
 
-- [ ] Fix all **High** severity issues
-- [ ] Fix all **Medium** severity issues (or document as known limitations)
-- [ ] Review and decide on **Low** severity items
-- [ ] Remove or guard all debug `print` statements
-- [ ] Test on macOS 12, 13, 14, 15
-- [ ] Test with VoiceOver enabled
-- [ ] Test with large files (1 MB+)
-- [ ] Verify sandbox entitlements are minimal
-- [ ] Update version number and build number
-- [ ] Create release notes
-- [ ] Test CLI tools on various systems
-- [ ] Verify app icon and assets are complete
-- [ ] Check for localization needs
+- [ ] Fix critical build settings (Target 26.1 -> 13.0)
+- [ ] Fix all **High** severity code issues (#1, #2, #18)
+- [ ] Fix Permission/Install issues in Makefile (#19)
+- [ ] Implement missing read-only support for iOS (#11)
+- [ ] Ensure `App` doesn't leak memory (NotificationCenter #6)
+- [ ] Decide on duplicate code strategy (#20)
+- [ ] Clean up unused files (#7)
+- [ ] Verify entitlements (#8)
+- [ ] Regression test all features
+- [ ] Create signed Release build
+- [ ] Verify CLI tools export correctly
+- [ ] Update README and docs
+
 

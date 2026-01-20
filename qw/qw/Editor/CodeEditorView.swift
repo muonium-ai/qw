@@ -11,6 +11,7 @@ import SwiftUI
 struct CodeEditorView: View {
     @Binding var text: String
     let fileType: SupportedFileType
+    let fileName: String?
     var isReadOnly: Bool = false
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject private var settings = EditorSettingsManager.shared
@@ -74,6 +75,7 @@ struct CodeEditorView: View {
             MacOSTextEditor(
                 text: $text,
                 fileType: fileType,
+                fileName: fileName,
                 themeName: themeKey,
                 theme: theme,
                 fontSize: settings.fontSize,
@@ -102,6 +104,7 @@ struct CodeEditorView: View {
             iOSTextEditor(
                 text: $text,
                 fileType: fileType,
+                fileName: fileName,
                 themeName: themeKey,
                 theme: theme,
                 fontSize: settings.fontSize,
@@ -286,6 +289,7 @@ import AppKit
 struct MacOSTextEditor: NSViewRepresentable {
     @Binding var text: String
     let fileType: SupportedFileType
+    let fileName: String?
     let themeName: String
     let theme: SyntaxTheme
     let fontSize: Double
@@ -447,6 +451,11 @@ struct MacOSTextEditor: NSViewRepresentable {
             context.coordinator.fileType = fileType
             needsHighlight = true
         }
+
+        if context.coordinator.fileName != fileName {
+            context.coordinator.fileName = fileName
+            needsHighlight = true
+        }
         
         if context.coordinator.themeName != themeName {
             context.coordinator.themeName = themeName
@@ -499,6 +508,7 @@ struct MacOSTextEditor: NSViewRepresentable {
     class Coordinator: NSObject, NSTextViewDelegate {
         var parent: MacOSTextEditor
         var fileType: SupportedFileType
+        var fileName: String?
         var theme: SyntaxTheme
         var themeName: String
         var currentFont: NSFont
@@ -511,6 +521,7 @@ struct MacOSTextEditor: NSViewRepresentable {
         init(_ parent: MacOSTextEditor) {
             self.parent = parent
             self.fileType = parent.fileType
+            self.fileName = parent.fileName
             self.theme = parent.theme
             self.themeName = parent.themeName
             self.currentFont = parent.getFont()
@@ -644,7 +655,7 @@ struct MacOSTextEditor: NSViewRepresentable {
                 return
             }
             
-            let highlighter = SyntaxHighlighter(fileType: fileType, theme: theme)
+            let highlighter = SyntaxHighlighter(fileType: fileType, theme: theme, fileName: fileName)
             
             // Store selection
             let selectedRanges = textView.selectedRanges
@@ -687,6 +698,7 @@ import UIKit
 struct iOSTextEditor: UIViewRepresentable {
     @Binding var text: String
     let fileType: SupportedFileType
+    let fileName: String?
     let themeName: String
     let theme: SyntaxTheme
     let fontSize: Double
@@ -781,6 +793,11 @@ struct iOSTextEditor: UIViewRepresentable {
             context.coordinator.fileType = fileType
             needsHighlight = true
         }
+
+        if context.coordinator.fileName != fileName {
+            context.coordinator.fileName = fileName
+            needsHighlight = true
+        }
         
         if context.coordinator.themeName != themeName {
             context.coordinator.themeName = themeName
@@ -813,6 +830,7 @@ struct iOSTextEditor: UIViewRepresentable {
     class Coordinator: NSObject, UITextViewDelegate {
         var parent: iOSTextEditor
         var fileType: SupportedFileType
+        var fileName: String?
         var theme: SyntaxTheme
         var themeName: String
         var currentFont: UIFont
@@ -822,6 +840,7 @@ struct iOSTextEditor: UIViewRepresentable {
         init(_ parent: iOSTextEditor) {
             self.parent = parent
             self.fileType = parent.fileType
+            self.fileName = parent.fileName
             self.theme = parent.theme
             self.themeName = parent.themeName
             self.currentFont = parent.getFont()
@@ -871,7 +890,7 @@ struct iOSTextEditor: UIViewRepresentable {
                 return
             }
             
-            let highlighter = SyntaxHighlighter(fileType: fileType, theme: theme)
+            let highlighter = SyntaxHighlighter(fileType: fileType, theme: theme, fileName: fileName)
             
             let selectedRange = textView.selectedRange
             
@@ -916,6 +935,7 @@ struct iOSTextEditor: UIViewRepresentable {
         - Item 2
         - Item 3
         """),
-        fileType: .markdown
+        fileType: .markdown,
+        fileName: "sample.md"
     )
 }

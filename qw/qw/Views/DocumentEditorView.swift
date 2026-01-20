@@ -57,6 +57,7 @@ struct DocumentEditorView: View {
             CodeEditorView(
                 text: $document.text,
                 fileType: fileType,
+                fileName: fileURL?.lastPathComponent,
                 isReadOnly: isReadOnly
             )
             .accessibilityIdentifier("documentEditor")
@@ -191,6 +192,7 @@ struct DocumentEditorView: View {
         let exporter = DocumentExporter(
             text: document.text,
             fileType: fileType,
+            fileName: fileURL?.lastPathComponent,
             theme: settings.syntaxTheme(for: .light), // Use light theme for printing
             includeLineNumbers: settings.showLineNumbers,
             fontSize: settings.fontSize,
@@ -204,6 +206,7 @@ struct DocumentEditorView: View {
         let exporter = DocumentExporter(
             text: document.text,
             fileType: fileType,
+            fileName: fileURL?.lastPathComponent,
             theme: settings.syntaxTheme(for: .light), // Use light theme for PDF
             includeLineNumbers: settings.showLineNumbers,
             fontSize: settings.fontSize,
@@ -219,6 +222,7 @@ struct DocumentEditorView: View {
         let exporter = DocumentExporter(
             text: document.text,
             fileType: fileType,
+            fileName: fileURL?.lastPathComponent,
             theme: settings.syntaxTheme(for: .light), // Use light theme for PNG
             includeLineNumbers: settings.showLineNumbers,
             fontSize: settings.fontSize,

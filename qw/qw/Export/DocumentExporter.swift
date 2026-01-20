@@ -18,6 +18,7 @@ class DocumentExporter {
     
     private let text: String
     private let fileType: SupportedFileType
+    private let fileName: String?
     private let theme: SyntaxTheme
     private let includeLineNumbers: Bool
     private let fontSize: CGFloat
@@ -28,6 +29,7 @@ class DocumentExporter {
     init(
         text: String,
         fileType: SupportedFileType,
+        fileName: String? = nil,
         theme: SyntaxTheme,
         includeLineNumbers: Bool,
         fontSize: CGFloat = 12,
@@ -35,6 +37,7 @@ class DocumentExporter {
     ) {
         self.text = text
         self.fileType = fileType
+        self.fileName = fileName
         self.theme = theme
         self.includeLineNumbers = includeLineNumbers
         self.fontSize = fontSize
@@ -43,13 +46,14 @@ class DocumentExporter {
     
     // MARK: - Convenience initializer from settings
     
-    convenience init(text: String, fileType: SupportedFileType, colorScheme: ColorScheme) {
+    convenience init(text: String, fileType: SupportedFileType, fileName: String? = nil, colorScheme: ColorScheme) {
         let settings = EditorSettingsManager.shared
         let theme = settings.syntaxTheme(for: colorScheme)
         
         self.init(
             text: text,
             fileType: fileType,
+            fileName: fileName,
             theme: theme,
             includeLineNumbers: settings.showLineNumbers,
             fontSize: settings.fontSize,
@@ -79,10 +83,11 @@ class DocumentExporter {
     
     // MARK: - Create Attributed String
     
-    private func createAttributedString() -> NSAttributedString {
+    private func createAttributedString(includeLineNumbers: Bool? = nil) -> NSAttributedString {
+        let includeLineNumbers = includeLineNumbers ?? self.includeLineNumbers
         let lines = text.components(separatedBy: "\n")
         let result = NSMutableAttributedString()
-        let highlighter = SyntaxHighlighter(fileType: fileType, theme: theme)
+        let highlighter = SyntaxHighlighter(fileType: fileType, theme: theme, fileName: fileName)
         let font = getFont()
         
         // Calculate line number width based on max digits needed
@@ -101,6 +106,28 @@ class DocumentExporter {
         // Set headIndent so wrapped lines start after line number area
         if includeLineNumbers {
             paragraphStyle.headIndent = lineNumberWidth
+        }
+
+        if !includeLineNumbers {
+            // Build attributed string using full-text tokenization (pygments-swift)
+            let full = NSMutableAttributedString(string: text)
+            full.addAttributes([
+                .font: font,
+                .foregroundColor: plainColor,
+                .paragraphStyle: paragraphStyle
+            ], range: NSRange(location: 0, length: (text as NSString).length))
+
+            let tokens = highlighter.tokenize(text)
+            for token in tokens {
+                let nsRange = NSRange(token.range, in: text)
+                if nsRange.location != NSNotFound && nsRange.location + nsRange.length <= (text as NSString).length {
+                    full.addAttributes([
+                        .foregroundColor: nsColor(from: theme.color(for: token.type))
+                    ], range: nsRange)
+                }
+            }
+
+            return full
         }
         
         for (index, line) in lines.enumerated() {
@@ -207,252 +234,40 @@ class DocumentExporter {
     
     // MARK: - Export to PDF
     
-    // MARK: - PDF Export Configuration
-    
-    /// Number of lines per page in PDF export (adjust as needed)
-    private let pdfLinesPerPage: Int = 28
-    
     func exportToPDF(to url: URL) throws {
-        let attributedString = createAttributedString()
-        
-        // Page size (A4: 210mm x 297mm at 72 DPI = 595 x 842 points)
-        let pageWidth: CGFloat = 595
-        let pageHeight: CGFloat = 842
-        
-        // Margins (in points, 72 points = 1 inch)
-        let marginLeft: CGFloat = 50      // ~0.7 inch left margin
-        let marginRight: CGFloat = 50     // ~0.7 inch right margin
-        let marginTop: CGFloat = 60       // ~0.8 inch top margin (space for header)
-        let marginBottom: CGFloat = 60    // ~0.8 inch bottom margin (space for footer/page number)
-        
-        // Generate PDF data and write to file
-        let pdfData = generatePDFData(
-            attributedString: attributedString,
-            pageWidth: pageWidth,
-            pageHeight: pageHeight,
-            marginLeft: marginLeft,
-            marginRight: marginRight,
-            marginTop: marginTop,
-            marginBottom: marginBottom,
-            linesPerPage: pdfLinesPerPage
+        let attributedString = createAttributedString(includeLineNumbers: false)
+        let options = RenderOptions(
+            width: nil,
+            padding: 18,
+            background: nsColor(from: theme.background),
+            foreground: nsColor(from: theme.plain)
         )
-        
+
+        let pdfData = CodeRender.renderPDF(attributed: attributedString, options: options)
         if pdfData.isEmpty {
             throw ExportError.pdfCreationFailed
         }
-        
-        try pdfData.write(to: url)
-    }
-    
-    private func generatePDFData(
-        attributedString: NSAttributedString,
-        pageWidth: CGFloat,
-        pageHeight: CGFloat,
-        marginLeft: CGFloat,
-        marginRight: CGFloat,
-        marginTop: CGFloat,
-        marginBottom: CGFloat,
-        linesPerPage: Int
-    ) -> Data {
-        let contentWidth = pageWidth - marginLeft - marginRight
-        
-        // Set up text layout system
-        let textStorage = NSTextStorage(attributedString: attributedString)
-        let layoutManager = NSLayoutManager()
-        textStorage.addLayoutManager(layoutManager)
-        
-        let textContainer = NSTextContainer(size: NSSize(width: contentWidth, height: .greatestFiniteMagnitude))
-        textContainer.lineFragmentPadding = 0
-        layoutManager.addTextContainer(textContainer)
-        
-        // Force complete layout
-        layoutManager.ensureLayout(for: textContainer)
-        
-        // Collect all line rectangles and their glyph ranges
-        var lineInfos: [(rect: CGRect, glyphRange: NSRange)] = []
-        let fullGlyphRange = layoutManager.glyphRange(for: textContainer)
-        
-        var glyphIndex = fullGlyphRange.location
-        while glyphIndex < NSMaxRange(fullGlyphRange) {
-            var lineRect = CGRect.zero
-            var lineGlyphRange = NSRange(location: 0, length: 0)
-            
-            lineRect = layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: &lineGlyphRange)
-            lineInfos.append((rect: lineRect, glyphRange: lineGlyphRange))
-            
-            glyphIndex = NSMaxRange(lineGlyphRange)
-        }
-        
-        // Calculate pages based on complete lines
-        let totalLines = lineInfos.count
-        let totalPages = max(1, Int(ceil(Double(totalLines) / Double(linesPerPage))))
-        
-        // Create PDF
-        let pdfData = NSMutableData()
-        var mediaBox = CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight)
-        
-        guard let consumer = CGDataConsumer(data: pdfData as CFMutableData),
-              let pdfContext = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else {
-            return Data()
-        }
-        
-        for pageIndex in 0..<totalPages {
-            pdfContext.beginPDFPage(nil)
-            pdfContext.saveGState()
-            
-            // Fill page background
-            pdfContext.setFillColor(NSColor(theme.background).cgColor)
-            pdfContext.fill(CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight))
-            
-            // Calculate which lines go on this page
-            let startLineIndex = pageIndex * linesPerPage
-            let endLineIndex = min(startLineIndex + linesPerPage, totalLines)
-            
-            guard startLineIndex < totalLines else {
-                pdfContext.restoreGState()
-                pdfContext.endPDFPage()
-                continue
-            }
-            
-            // Get the Y offset of the first line on this page (to normalize positions)
-            let firstLineY = lineInfos[startLineIndex].rect.origin.y
-            
-            // Transform for PDF: flip coordinate system
-            // PDF origin is bottom-left, we need top-left with Y going down
-            // Position content area with proper margins
-            pdfContext.translateBy(x: marginLeft, y: pageHeight - marginTop)
-            pdfContext.scaleBy(x: 1.0, y: -1.0)
-            
-            // Set up NSGraphicsContext for drawing
-            let nsContext = NSGraphicsContext(cgContext: pdfContext, flipped: true)
-            
-            NSGraphicsContext.saveGraphicsState()
-            NSGraphicsContext.current = nsContext
-            
-            // Draw all lines for this page using a single offset
-            // The offset moves the drawing origin so the first line of this page appears at y=0
-            let drawOffset = NSPoint(x: 0, y: -firstLineY)
-            
-            // Get the combined glyph range for all lines on this page
-            let pageStartGlyph = lineInfos[startLineIndex].glyphRange.location
-            let pageEndGlyph = NSMaxRange(lineInfos[endLineIndex - 1].glyphRange)
-            let pageGlyphRange = NSRange(location: pageStartGlyph, length: pageEndGlyph - pageStartGlyph)
-            
-            // Draw background and glyphs for all lines on this page at once
-            layoutManager.drawBackground(forGlyphRange: pageGlyphRange, at: drawOffset)
-            layoutManager.drawGlyphs(forGlyphRange: pageGlyphRange, at: drawOffset)
-            
-            NSGraphicsContext.restoreGraphicsState()
-            pdfContext.restoreGState()
-            
-            // Draw page number in footer (centered at bottom)
-            pdfContext.saveGState()
-            let pageNumberText = "Page \(pageIndex + 1) of \(totalPages)"
-            let pageNumberFont = NSFont.systemFont(ofSize: 10)
-            let pageNumberAttributes: [NSAttributedString.Key: Any] = [
-                .font: pageNumberFont,
-                .foregroundColor: NSColor.gray
-            ]
-            let pageNumberString = NSAttributedString(string: pageNumberText, attributes: pageNumberAttributes)
-            let pageNumberSize = pageNumberString.size()
-            
-            // Position for footer: centered horizontally, near bottom
-            let footerX = (pageWidth - pageNumberSize.width) / 2
-            let footerY = marginBottom / 2 - pageNumberSize.height / 2  // Center in bottom margin
-            
-            // Draw page number (need to flip for text drawing)
-            pdfContext.translateBy(x: footerX, y: footerY + pageNumberSize.height)
-            pdfContext.scaleBy(x: 1.0, y: -1.0)
-            
-            let footerContext = NSGraphicsContext(cgContext: pdfContext, flipped: true)
-            NSGraphicsContext.saveGraphicsState()
-            NSGraphicsContext.current = footerContext
-            pageNumberString.draw(at: .zero)
-            NSGraphicsContext.restoreGraphicsState()
-            
-            pdfContext.restoreGState()
-            pdfContext.endPDFPage()
-        }
-        
-        pdfContext.closePDF()
-        
-        return pdfData as Data
+
+        try pdfData.write(to: url, options: .atomic)
     }
     
     // MARK: - Export to PNG
     
     func exportToPNG(to url: URL) throws {
-        let attributedString = createAttributedString()
-        
-        // Create text view for rendering
-        let textStorage = NSTextStorage(attributedString: attributedString)
-        let layoutManager = NSLayoutManager()
-        textStorage.addLayoutManager(layoutManager)
-        
-        let textContainer = NSTextContainer(size: NSSize(width: 800, height: CGFloat.greatestFiniteMagnitude))
-        textContainer.lineFragmentPadding = 10
-        layoutManager.addTextContainer(textContainer)
-        
-        // Force layout calculation
-        layoutManager.ensureLayout(for: textContainer)
-        
-        // Get content size
-        let usedRect = layoutManager.usedRect(for: textContainer)
-        let padding: CGFloat = 20
-        let width = usedRect.width + (padding * 2)
-        let height = usedRect.height + (padding * 2)
-        
-        // Create bitmap
-        guard let bitmapRep = NSBitmapImageRep(
-            bitmapDataPlanes: nil,
-            pixelsWide: Int(width * 2), // 2x for retina
-            pixelsHigh: Int(height * 2),
-            bitsPerSample: 8,
-            samplesPerPixel: 4,
-            hasAlpha: true,
-            isPlanar: false,
-            colorSpaceName: .deviceRGB,
-            bytesPerRow: 0,
-            bitsPerPixel: 0
-        ) else {
-            throw ExportError.pngCreationFailed
-        }
-        
-        bitmapRep.size = NSSize(width: width, height: height)
-        
-        // Create graphics context
-        guard let context = NSGraphicsContext(bitmapImageRep: bitmapRep) else {
-            throw ExportError.pngCreationFailed
-        }
-        
-        let flippedContext = NSGraphicsContext(cgContext: context.cgContext, flipped: true)
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = flippedContext
-        flippedContext.imageInterpolation = .high
+        let attributedString = createAttributedString(includeLineNumbers: false)
+        let options = RenderOptions(
+            width: nil,
+            padding: 18,
+            background: nsColor(from: theme.background),
+            foreground: nsColor(from: theme.plain)
+        )
 
-        // Draw via NSTextView to preserve correct line order and text orientation
-        let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: width, height: height))
-        textView.isEditable = false
-        textView.isSelectable = false
-        textView.drawsBackground = true
-        textView.backgroundColor = NSColor(theme.background)
-        textView.textContainerInset = NSSize(width: padding, height: padding)
-        textView.textContainer?.lineFragmentPadding = 0
-        textView.textContainer?.widthTracksTextView = true
-        textView.textContainer?.heightTracksTextView = false
-        textView.textContainer?.size = NSSize(width: width - padding * 2, height: height - padding * 2)
-        textView.textStorage?.setAttributedString(attributedString)
-        textView.layoutManager?.ensureLayout(for: textView.textContainer!)
-        textView.draw(textView.bounds)
-        
-        NSGraphicsContext.restoreGraphicsState()
-        
-        // Save PNG
-        guard let pngData = bitmapRep.representation(using: .png, properties: [:]) else {
+        do {
+            let pngData = try CodeRender.renderPNG(attributed: attributedString, options: options, scale: 2.0)
+            try pngData.write(to: url, options: .atomic)
+        } catch {
             throw ExportError.pngCreationFailed
         }
-        
-        try pngData.write(to: url)
     }
     
     // MARK: - Show Export Dialogs
@@ -584,6 +399,7 @@ class CLIExporter {
         let exporter = DocumentExporter(
             text: text,
             fileType: fileType,
+            fileName: inputURL.lastPathComponent,
             theme: theme,
             includeLineNumbers: includeLineNumbers,
             fontSize: fontSize,
@@ -617,6 +433,7 @@ class CLIExporter {
         let exporter = DocumentExporter(
             text: text,
             fileType: fileType,
+            fileName: inputURL.lastPathComponent,
             theme: theme,
             includeLineNumbers: includeLineNumbers,
             fontSize: fontSize,

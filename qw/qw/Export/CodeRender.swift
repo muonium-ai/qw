@@ -1,0 +1,191 @@
+import AppKit
+import Foundation
+
+struct RenderOptions {
+    var width: CGFloat?
+    var padding: CGFloat
+    var background: NSColor
+    var foreground: NSColor
+
+    static var `default`: RenderOptions {
+        RenderOptions(
+            width: 900,
+            padding: 18,
+            background: NSColor(calibratedWhite: 1, alpha: 1),
+            foreground: NSColor(calibratedWhite: 0.1, alpha: 1)
+        )
+    }
+}
+
+enum CodeRenderError: Error {
+    case bitmapAllocationFailed
+    case pngEncodingFailed
+}
+
+enum CodeRender {
+    private struct TextStats {
+        let lineCount: Int
+        let maxLineCharacters: Int
+
+        static func from(_ attributed: NSAttributedString) -> TextStats {
+            let s = attributed.string
+            if s.isEmpty {
+                return TextStats(lineCount: 1, maxLineCharacters: 0)
+            }
+            var lines = s.split(separator: "\n", omittingEmptySubsequences: false)
+            if lines.isEmpty { lines = [""] }
+            var maxChars = 0
+            for line in lines {
+                // Use tab-expanded columns so we don't underestimate width for tab-indented code.
+                let cols = displayColumns(String(line), tabSize: 4)
+                maxChars = max(maxChars, cols)
+            }
+            return TextStats(lineCount: max(1, lines.count), maxLineCharacters: maxChars)
+        }
+
+        private static func displayColumns(_ s: String, tabSize: Int) -> Int {
+            var col = 0
+            for ch in s.unicodeScalars {
+                if ch == "\t" {
+                    let toNext = tabSize - (col % tabSize)
+                    col += toNext
+                } else {
+                    col += 1
+                }
+            }
+            return col
+        }
+    }
+
+    private static func estimateWidth(attributed: NSAttributedString, padding: CGFloat) -> CGFloat {
+        let stats = TextStats.from(attributed)
+
+        // Prefer the actual font if present; otherwise fall back to a monospaced guess.
+        let font = (attributed.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)
+            ?? NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+
+        // For monospaced fonts, using a single-glyph width is a decent estimate.
+        let glyphWidth = ("M" as NSString).size(withAttributes: [.font: font]).width
+        // Add a small safety margin so we don't accidentally wrap due to rounding.
+        let contentWidth = ceil(CGFloat(stats.maxLineCharacters) * glyphWidth + glyphWidth * 2)
+        return max(1, contentWidth + padding * 2)
+    }
+
+    static func makeTextView(attributed: NSAttributedString, options: RenderOptions) -> NSTextView {
+        let initialWidth: CGFloat = {
+            if let w = options.width { return w }
+            return estimateWidth(attributed: attributed, padding: options.padding)
+        }()
+
+        let containerSize = NSSize(
+            width: max(1, initialWidth - options.padding * 2),
+            height: CGFloat.greatestFiniteMagnitude
+        )
+
+        let textStorage = NSTextStorage(attributedString: attributed)
+        let layoutManager = NSLayoutManager()
+        let textContainer = NSTextContainer(containerSize: containerSize)
+        textContainer.lineFragmentPadding = 0
+        textContainer.lineBreakMode = .byCharWrapping
+        // Important for offscreen layout: don't let the container height track the view.
+        // Otherwise the initial 1pt-high frame can limit layout and produce cropped PNGs.
+        textContainer.heightTracksTextView = false
+        layoutManager.addTextContainer(textContainer)
+        textStorage.addLayoutManager(layoutManager)
+
+        let textView = NSTextView(frame: .zero, textContainer: textContainer)
+        textView.drawsBackground = true
+        textView.backgroundColor = options.background
+        textView.isEditable = false
+        textView.isSelectable = false
+        textView.textContainerInset = NSSize(width: options.padding, height: options.padding)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.minSize = NSSize(width: 0, height: 0)
+        textView.maxSize = NSSize(width: initialWidth, height: CGFloat.greatestFiniteMagnitude)
+
+        // IMPORTANT: keep the container width explicit. Tracking the textView width can be
+        // problematic before the view has its final frame, and it can lead to incorrect
+        // layout caching (PDF reflows later; PNG often doesn't).
+        textView.textContainer?.widthTracksTextView = false
+        textView.textContainer?.heightTracksTextView = false
+        textView.textContainer?.containerSize = containerSize
+
+        // Give the view a width up-front so layout happens against the right constraint.
+        textView.frame = NSRect(x: 0, y: 0, width: initialWidth, height: 1)
+
+        // First layout pass (measuring).
+        layoutManager.ensureLayout(for: textContainer)
+        layoutManager.ensureLayout(forCharacterRange: NSRange(location: 0, length: textStorage.length))
+        var used = layoutManager.usedRect(for: textContainer)
+
+        // Final width:
+        // - If the user requested a width, honor it.
+        // - Otherwise, use our estimate but also expand if the laid-out text is wider.
+        let finalWidth: CGFloat = {
+            if let w = options.width { return w }
+            return max(initialWidth, ceil(used.width + options.padding * 2))
+        }()
+
+        // Update container width if we changed finalWidth.
+        textView.textContainer?.containerSize = NSSize(
+            width: max(1, finalWidth - options.padding * 2),
+            height: CGFloat.greatestFiniteMagnitude
+        )
+
+        // Second layout pass (finalizing) so PNG drawing uses the correct cached layout.
+        layoutManager.invalidateLayout(forCharacterRange: NSRange(location: 0, length: textStorage.length), actualCharacterRange: nil)
+        layoutManager.ensureLayout(for: textContainer)
+        layoutManager.ensureLayout(forCharacterRange: NSRange(location: 0, length: textStorage.length))
+        used = layoutManager.usedRect(for: textContainer)
+
+        // `usedRect` can be slightly optimistic in some cases; include the extra line fragment
+        // and a tiny safety margin to avoid off-by-one rasterization clipping.
+        let extra = layoutManager.extraLineFragmentRect
+        let contentHeight = max(used.maxY, extra.maxY)
+        let finalHeight = ceil(contentHeight + options.padding * 2 + 2)
+        textView.frame = NSRect(x: 0, y: 0, width: finalWidth, height: finalHeight)
+        return textView
+    }
+
+    static func renderPDF(attributed: NSAttributedString, options: RenderOptions) -> Data {
+        let view = makeTextView(attributed: attributed, options: options)
+        return view.dataWithPDF(inside: view.bounds)
+    }
+
+    static func renderPNG(attributed: NSAttributedString, options: RenderOptions, scale: CGFloat = 2.0) throws -> Data {
+        let view = makeTextView(attributed: attributed, options: options)
+        view.wantsLayer = true
+
+        let bounds = view.bounds
+        let pixelW = Int(ceil(bounds.width * scale))
+        let pixelH = Int(ceil(bounds.height * scale))
+
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: pixelW,
+            pixelsHigh: pixelH,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ) else {
+            throw CodeRenderError.bitmapAllocationFailed
+        }
+
+        // Size in points; pixelsWide/pixelsHigh control resolution.
+        rep.size = NSSize(width: bounds.width, height: bounds.height)
+
+        // Render at the target scale.
+        view.layer?.contentsScale = scale
+        view.cacheDisplay(in: bounds, to: rep)
+
+        guard let data = rep.representation(using: .png, properties: [:]) else {
+            throw CodeRenderError.pngEncodingFailed
+        }
+        return data
+    }
+}

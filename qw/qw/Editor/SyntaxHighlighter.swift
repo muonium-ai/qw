@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import PygmentsSwift
 
 /// Token types for syntax highlighting
 enum TokenType {
@@ -270,338 +271,125 @@ struct SyntaxTheme {
     }
 }
 
-/// Main syntax highlighter
+/// Main syntax highlighter (PygmentsSwift-backed)
 class SyntaxHighlighter {
     let fileType: SupportedFileType
     let theme: SyntaxTheme
-    
-    // Language keywords
-    private static let pythonKeywords = Set([
-        "and", "as", "assert", "async", "await", "break", "class", "continue",
-        "def", "del", "elif", "else", "except", "False", "finally", "for",
-        "from", "global", "if", "import", "in", "is", "lambda", "None",
-        "nonlocal", "not", "or", "pass", "raise", "return", "True", "try",
-        "while", "with", "yield"
-    ])
-    
-    private static let javascriptKeywords = Set([
-        "async", "await", "break", "case", "catch", "class", "const", "continue",
-        "debugger", "default", "delete", "do", "else", "export", "extends",
-        "false", "finally", "for", "function", "if", "import", "in", "instanceof",
-        "let", "new", "null", "return", "static", "super", "switch", "this",
-        "throw", "true", "try", "typeof", "undefined", "var", "void", "while", "with", "yield"
-    ])
-    
-    private static let swiftKeywords = Set([
-        "actor", "any", "as", "associatedtype", "async", "await", "break", "case",
-        "catch", "class", "continue", "default", "defer", "deinit", "do", "else",
-        "enum", "extension", "fallthrough", "false", "fileprivate", "final", "for",
-        "func", "get", "guard", "if", "import", "in", "init", "inout", "internal",
-        "is", "lazy", "let", "mutating", "nil", "nonisolated", "open", "operator",
-        "override", "private", "protocol", "public", "repeat", "required", "rethrows",
-        "return", "self", "Self", "set", "some", "static", "struct", "subscript",
-        "super", "switch", "throw", "throws", "true", "try", "typealias", "var",
-        "weak", "where", "while"
-    ])
-    
-    private static let htmlTags = Set([
-        "html", "head", "body", "div", "span", "p", "a", "img", "ul", "ol", "li",
-        "table", "tr", "td", "th", "form", "input", "button", "select", "option",
-        "textarea", "label", "script", "style", "link", "meta", "title", "header",
-        "footer", "nav", "main", "section", "article", "aside", "h1", "h2", "h3",
-        "h4", "h5", "h6", "br", "hr", "pre", "code", "blockquote", "strong", "em"
-    ])
-    
-    init(fileType: SupportedFileType, theme: SyntaxTheme) {
+    let fileName: String?
+
+    init(fileType: SupportedFileType, theme: SyntaxTheme, fileName: String? = nil) {
         self.fileType = fileType
         self.theme = theme
+        self.fileName = fileName
     }
-    
+
     /// Highlight text and return attributed string
     func highlight(_ text: String) -> AttributedString {
         var attributedString = AttributedString(text)
-        
-        // Set base attributes
         attributedString.foregroundColor = theme.plain
-        
+
         let tokens = tokenize(text)
-        
+
         for token in tokens {
             if let range = Range(token.range, in: attributedString) {
                 attributedString[range].foregroundColor = theme.color(for: token.type)
-                
+
                 // Add bold for keywords and headings
                 if token.type == .keyword || token.type == .heading {
                     attributedString[range].font = .system(.body, weight: .semibold)
                 }
-                
+
                 // Add italic for comments and emphasis
                 if token.type == .comment || token.type == .emphasis {
                     attributedString[range].font = .system(.body).italic()
                 }
             }
         }
-        
+
         return attributedString
     }
-    
-    /// Tokenize text based on file type (public for direct use)
+
+    /// Tokenize text using PygmentsSwift
     func tokenize(_ text: String) -> [Token] {
+        guard let lexer = makeLexer() else { return [] }
+        let pygmentsTokens = lexer.getTokens(text)
+        if pygmentsTokens.isEmpty { return [] }
+
+        let totalLength = text.utf16.count
+
+        return pygmentsTokens.compactMap { token in
+            let length = token.value.utf16.count
+            guard length > 0 else { return nil }
+            let end = token.start + length
+            guard token.start >= 0, end <= totalLength else { return nil }
+            let nsRange = NSRange(location: token.start, length: length)
+            guard let range = Range(nsRange, in: text) else { return nil }
+            return Token(range: range, type: mapTokenType(token.type))
+        }
+    }
+
+    private func makeLexer() -> PygmentsSwift.Lexer? {
+        if let fileName, let lexer = PygmentsSwift.LexerRegistry.makeLexer(filename: fileName) {
+            return lexer
+        }
+
+        if let languageName = languageNameForFileType(),
+           let lexer = PygmentsSwift.LexerRegistry.makeLexer(languageName: languageName) {
+            return lexer
+        }
+
+        let fallbackName = "file.\(fileType.rawValue)"
+        return PygmentsSwift.LexerRegistry.makeLexer(filename: fallbackName)
+    }
+
+    private func languageNameForFileType() -> String? {
         switch fileType {
-        case .python:
-            return tokenizePython(text)
-        case .javascript:
-            return tokenizeJavaScript(text)
-        case .swift:
-            return tokenizeSwift(text)
-        case .html:
-            return tokenizeHTML(text)
-        case .css:
-            return tokenizeCSS(text)
-        case .json:
-            return tokenizeJSON(text)
-        case .yaml, .yml:
-            return tokenizeYAML(text)
-        case .markdown:
-            return tokenizeMarkdown(text)
         case .plainText:
-            return []
+            return nil
+        case .markdown:
+            return "markdown"
+        case .json:
+            return "json"
+        case .yaml, .yml:
+            return "yaml"
+        case .python:
+            return "python"
+        case .javascript:
+            return "javascript"
+        case .html:
+            return "html"
+        case .css:
+            return "css"
+        case .swift:
+            return "swift"
         }
     }
-    
-    // MARK: - Python Tokenizer
-    private func tokenizePython(_ text: String) -> [Token] {
-        var tokens: [Token] = []
-        
-        // Comments - must be first
-        tokens.append(contentsOf: matchPattern(#"#.*$"#, in: text, type: .comment))
-        
-        // Triple-quoted strings (simplified)
-        tokens.append(contentsOf: matchPattern(#"\"\"\"[^\"]*\"\"\""#, in: text, type: .string))
-        tokens.append(contentsOf: matchPattern(#"'''[^']*'''"#, in: text, type: .string))
-        
-        // Simple strings (no escapes to avoid backtracking)
-        tokens.append(contentsOf: matchPattern(#""[^"\n]*""#, in: text, type: .string))
-        tokens.append(contentsOf: matchPattern(#"'[^'\n]*'"#, in: text, type: .string))
-        
-        // Numbers
-        tokens.append(contentsOf: matchPattern(#"\b\d+\.?\d*\b"#, in: text, type: .number))
-        
-        // Keywords
-        tokens.append(contentsOf: matchKeywords(Self.pythonKeywords, in: text))
-        
-        // Function definitions (simple pattern without lookbehind)
-        tokens.append(contentsOf: matchPattern(#"\bdef\s+\w+"#, in: text, type: .function))
-        tokens.append(contentsOf: matchPattern(#"\bclass\s+\w+"#, in: text, type: .type))
-        
-        return tokens
-    }
-    
-    // MARK: - JavaScript Tokenizer
-    private func tokenizeJavaScript(_ text: String) -> [Token] {
-        var tokens: [Token] = []
-        
-        // Comments
-        tokens.append(contentsOf: matchPattern(#"//.*$"#, in: text, type: .comment))
-        tokens.append(contentsOf: matchPattern(#"/\*[^*]*\*/"#, in: text, type: .comment))
-        
-        // Strings (simple patterns to avoid backtracking)
-        tokens.append(contentsOf: matchPattern(#"\"[^\"\n]*\""#, in: text, type: .string))
-        tokens.append(contentsOf: matchPattern(#"'[^'\n]*'"#, in: text, type: .string))
-        tokens.append(contentsOf: matchPattern(#"`[^`]*`"#, in: text, type: .string))
-        
-        // Numbers
-        tokens.append(contentsOf: matchPattern(#"\b\d+\.?\d*\b"#, in: text, type: .number))
-        
-        // Keywords
-        tokens.append(contentsOf: matchKeywords(Self.javascriptKeywords, in: text))
-        
-        // Function names (simple pattern without lookbehind)
-        tokens.append(contentsOf: matchPattern(#"\bfunction\s+\w+"#, in: text, type: .function))
-        
-        return tokens
-    }
-    
-    // MARK: - Swift Tokenizer
-    private func tokenizeSwift(_ text: String) -> [Token] {
-        var tokens: [Token] = []
-        
-        // Comments
-        tokens.append(contentsOf: matchPattern(#"//.*$"#, in: text, type: .comment))
-        tokens.append(contentsOf: matchPattern(#"/\*[\s\S]*?\*/"#, in: text, type: .comment))
-        
-        // Strings
-        tokens.append(contentsOf: matchPattern(#"\"\"\"[\s\S]*?\"\"\""#, in: text, type: .string))
-        tokens.append(contentsOf: matchPattern(#""[^"\\]*(?:\\.[^"\\]*)*""#, in: text, type: .string))
-        
-        // Numbers
-        tokens.append(contentsOf: matchPattern(#"\b\d+\.?\d*\b"#, in: text, type: .number))
-        
-        // Keywords
-        tokens.append(contentsOf: matchKeywords(Self.swiftKeywords, in: text))
-        
-        // Types (capitalized words)
-        tokens.append(contentsOf: matchPattern(#"\b[A-Z][a-zA-Z0-9]*\b"#, in: text, type: .type))
-        
-        // Function definitions
-        tokens.append(contentsOf: matchPattern(#"(?<=func\s)\w+"#, in: text, type: .function))
-        
-        return tokens
-    }
-    
-    // MARK: - HTML Tokenizer
-    private func tokenizeHTML(_ text: String) -> [Token] {
-        var tokens: [Token] = []
-        
-        // Comments (simplified)
-        tokens.append(contentsOf: matchPattern(#"<!--[^>]*-->"#, in: text, type: .comment))
-        
-        // Tags
-        tokens.append(contentsOf: matchPattern(#"</?[a-zA-Z][a-zA-Z0-9]*"#, in: text, type: .tag))
-        tokens.append(contentsOf: matchPattern(#"/?\s*>"#, in: text, type: .tag))
-        
-        // Attributes (simple pattern)
-        tokens.append(contentsOf: matchPattern(#"\s[a-zA-Z-]+="#, in: text, type: .attribute))
-        
-        // Strings
-        tokens.append(contentsOf: matchPattern(#""[^"]*""#, in: text, type: .string))
-        tokens.append(contentsOf: matchPattern(#"'[^']*'"#, in: text, type: .string))
-        
-        return tokens
-    }
-    
-    // MARK: - CSS Tokenizer
-    private func tokenizeCSS(_ text: String) -> [Token] {
-        var tokens: [Token] = []
-        
-        // Comments (simplified)
-        tokens.append(contentsOf: matchPattern(#"/\*[^*]*\*/"#, in: text, type: .comment))
-        
-        // Selectors (simple pattern)
-        tokens.append(contentsOf: matchPattern(#"[.#]?[a-zA-Z][a-zA-Z0-9_-]*\s*\{"#, in: text, type: .type))
-        
-        // Properties (simple pattern)
-        tokens.append(contentsOf: matchPattern(#"\s+[a-zA-Z-]+:"#, in: text, type: .property))
-        
-        // Values
-        tokens.append(contentsOf: matchPattern(#"#[0-9a-fA-F]{3,8}\b"#, in: text, type: .number))
-        tokens.append(contentsOf: matchPattern(#"\b\d+\.?\d*(px|em|rem|%|vh|vw|pt)?\b"#, in: text, type: .number))
-        
-        // Strings
-        tokens.append(contentsOf: matchPattern(#""[^"]*""#, in: text, type: .string))
-        tokens.append(contentsOf: matchPattern(#"'[^']*'"#, in: text, type: .string))
-        
-        return tokens
-    }
-    
-    // MARK: - JSON Tokenizer
-    private func tokenizeJSON(_ text: String) -> [Token] {
-        var tokens: [Token] = []
-        
-        // All strings (simple pattern - covers keys and values)
-        tokens.append(contentsOf: matchPattern(#"\"[^\"\n]*\""#, in: text, type: .string))
-        
-        // Numbers
-        tokens.append(contentsOf: matchPattern(#"-?\b\d+\.?\d*\b"#, in: text, type: .number))
-        
-        // Booleans and null
-        tokens.append(contentsOf: matchPattern(#"\b(true|false|null)\b"#, in: text, type: .keyword))
-        
-        // Punctuation
-        tokens.append(contentsOf: matchPattern(#"[\{\}\[\],:]"#, in: text, type: .punctuation))
-        
-        return tokens
-    }
-    
-    // MARK: - YAML Tokenizer
-    private func tokenizeYAML(_ text: String) -> [Token] {
-        var tokens: [Token] = []
-        
-        // Comments
-        tokens.append(contentsOf: matchPattern(#"#.*$"#, in: text, type: .comment))
-        
-        // Keys (simple pattern without lookahead)
-        tokens.append(contentsOf: matchPattern(#"^\s*[a-zA-Z_][a-zA-Z0-9_]*:"#, in: text, type: .property))
-        
-        // Strings
-        tokens.append(contentsOf: matchPattern(#""[^"]*""#, in: text, type: .string))
-        tokens.append(contentsOf: matchPattern(#"'[^']*'"#, in: text, type: .string))
-        
-        // Numbers
-        tokens.append(contentsOf: matchPattern(#":\s*-?\d+\.?\d*\s*$"#, in: text, type: .number))
-        
-        // Booleans and null
-        tokens.append(contentsOf: matchPattern(#"\b(true|false|yes|no|null|~)\b"#, in: text, type: .keyword))
-        
-        return tokens
-    }
-    
-    // MARK: - Markdown Tokenizer
-    private func tokenizeMarkdown(_ text: String) -> [Token] {
-        var tokens: [Token] = []
-        
-        // Headings
-        tokens.append(contentsOf: matchPattern(#"^#{1,6}\s+.+$"#, in: text, type: .heading))
-        
-        // Bold (simplified)
-        tokens.append(contentsOf: matchPattern(#"\*\*[^*\n]+\*\*"#, in: text, type: .emphasis))
-        tokens.append(contentsOf: matchPattern(#"__[^_\n]+__"#, in: text, type: .emphasis))
-        
-        // Italic (simplified)
-        tokens.append(contentsOf: matchPattern(#"\*[^*\n]+\*"#, in: text, type: .emphasis))
-        tokens.append(contentsOf: matchPattern(#"_[^_\n]+_"#, in: text, type: .emphasis))
-        
-        // Inline code
-        tokens.append(contentsOf: matchPattern(#"`[^`\n]+`"#, in: text, type: .codeBlock))
-        
-        // Links
-        tokens.append(contentsOf: matchPattern(#"\[[^\]]+\]\([^\)]+\)"#, in: text, type: .link))
-        
-        // Lists
-        tokens.append(contentsOf: matchPattern(#"^\s*[-*+]\s"#, in: text, type: .punctuation))
-        tokens.append(contentsOf: matchPattern(#"^\s*\d+\.\s"#, in: text, type: .punctuation))
-        
-        return tokens
-    }
-    
-    // MARK: - Helper Methods
-    
-    private func matchPattern(_ pattern: String, in text: String, type: TokenType) -> [Token] {
-        var tokens: [Token] = []
-        
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.anchorsMatchLines]) else {
-            return tokens
-        }
-        
-        let range = NSRange(text.startIndex..., in: text)
-        let matches = regex.matches(in: text, options: [], range: range)
-        
-        for match in matches {
-            if let swiftRange = Range(match.range, in: text) {
-                tokens.append(Token(range: swiftRange, type: type))
-            }
-        }
-        
-        return tokens
-    }
-    
-    private func matchKeywords(_ keywords: Set<String>, in text: String) -> [Token] {
-        var tokens: [Token] = []
-        
-        let pattern = "\\b(" + keywords.joined(separator: "|") + ")\\b"
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
-            return tokens
-        }
-        
-        let range = NSRange(text.startIndex..., in: text)
-        let matches = regex.matches(in: text, options: [], range: range)
-        
-        for match in matches {
-            if let swiftRange = Range(match.range, in: text) {
-                tokens.append(Token(range: swiftRange, type: .keyword))
-            }
-        }
-        
-        return tokens
+
+    private func mapTokenType(_ type: PygmentsSwift.TokenType) -> TokenType {
+        if type.isSubtype(of: .comment) { return .comment }
+        if type.isSubtype(of: .string) { return .string }
+        if type.isSubtype(of: .number) { return .number }
+        if type.isSubtype(of: .keyword) { return .keyword }
+
+        if type.isSubtype(of: .name.child("Function")) { return .function }
+        if type.isSubtype(of: .name.child("Class")) { return .type }
+        if type.isSubtype(of: .keyword.child("Type")) { return .type }
+
+        if type.isSubtype(of: .name.child("Attribute")) { return .attribute }
+        if type.isSubtype(of: .name.child("Tag")) { return .tag }
+        if type.isSubtype(of: .name.child("Decorator")) { return .attribute }
+
+        if type.isSubtype(of: .name.child("Variable")) { return .property }
+        if type.isSubtype(of: .name.child("Property")) { return .property }
+        if type.isSubtype(of: .name.child("Builtin")) { return .property }
+        if type.isSubtype(of: .name) { return .property }
+
+        if type.isSubtype(of: .punctuation) { return .punctuation }
+        if type.isSubtype(of: .operator) { return .punctuation }
+
+        if type.isSubtype(of: .text) { return .plain }
+        if type.isSubtype(of: .whitespace) { return .plain }
+
+        return .plain
     }
 }

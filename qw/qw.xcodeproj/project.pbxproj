@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		5C6D7E8F90123456789ABCDE /* PygmentsSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 4B5C6D7E8F90123456789ABC /* PygmentsSwift */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		8DFEB6A72F12BC26002ECE84 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5C6D7E8F90123456789ABCDE /* PygmentsSwift in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +117,7 @@
 			);
 			name = qw;
 			packageProductDependencies = (
+				4B5C6D7E8F90123456789ABC /* PygmentsSwift */,
 			);
 			productName = qw;
 			productReference = 8DFEB6972F12BC25002ECE84 /* qw.app */;
@@ -195,6 +201,9 @@
 			);
 			mainGroup = 8DFEB68E2F12BC25002ECE84;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				3A1B2C3D4E5F60718293A4B5 /* PygmentsSwift */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 8DFEB6982F12BC25002ECE84 /* Products */;
 			projectDirPath = "";
@@ -615,6 +624,21 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		3A1B2C3D4E5F60718293A4B5 /* PygmentsSwift */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "../vendor/pygments-swift/pygments-swift";
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		4B5C6D7E8F90123456789ABC /* PygmentsSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3A1B2C3D4E5F60718293A4B5 /* PygmentsSwift */;
+			productName = PygmentsSwift;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 8DFEB68F2F12BC25002ECE84 /* Project object */;
 }

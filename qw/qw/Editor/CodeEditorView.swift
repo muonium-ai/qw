@@ -111,13 +111,20 @@ struct CodeEditorView: View {
                 lineHeightMultiple: settings.lineHeight,
                 fontName: settings.selectedFont.fontName,
                 onLineCountChange: { count in
-                    lineCount = count
+                    // UIViewRepresentable.updateUIView can be invoked during SwiftUI's
+                    // view update cycle; defer state writes to avoid runtime warnings.
+                    DispatchQueue.main.async {
+                        lineCount = count
+                    }
                 },
                 onScrollChange: { offset, height, lineHeight in
-                    scrollOffset = offset
-                    contentHeight = height
-                    if lineHeight > 0 {
-                        actualLineHeight = lineHeight
+                    // Same rationale as onLineCountChange above.
+                    DispatchQueue.main.async {
+                        scrollOffset = offset
+                        contentHeight = height
+                        if lineHeight > 0 {
+                            actualLineHeight = lineHeight
+                        }
                     }
                 }
             )

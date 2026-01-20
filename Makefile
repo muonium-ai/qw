@@ -27,8 +27,11 @@ ICON_DIR := $(PROJECT_DIR)/$(PROJECT_NAME)/Assets.xcassets/AppIcon.appiconset
 MAC_DESTINATION := "platform=macOS"
 IPHONE_SIMULATOR_NAME := $(shell xcrun simctl list devices available 2>/dev/null | awk -F'[()]' '/iPhone/ {print $$1; exit}' | sed 's/^[[:space:]]*//;s/[[:space:]]*$$//')
 IPAD_SIMULATOR_NAME := $(shell xcrun simctl list devices available 2>/dev/null | awk -F'[()]' '/iPad/ {print $$1; exit}' | sed 's/^[[:space:]]*//;s/[[:space:]]*$$//')
-IPHONE_SIMULATOR_ID := $(shell xcrun simctl list devices available 2>/dev/null | awk -F'[()]' '/iPhone/ {print $$2; exit}')
-IPAD_SIMULATOR_ID := $(shell xcrun simctl list devices available 2>/dev/null | awk -F'[()]' '/iPad/ {print $$2; exit}')
+# NOTE: simctl output often includes multiple parenthesized fields, e.g.
+#   iPad (A16) (<UDID>) (Shutdown)
+# so we extract the UUID-like UDID via regex rather than assuming a fixed field index.
+IPHONE_SIMULATOR_ID := $(shell xcrun simctl list devices available 2>/dev/null | awk '/iPhone/ { if (match($$0, /[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}/)) { print substr($$0, RSTART, RLENGTH); exit } }')
+IPAD_SIMULATOR_ID := $(shell xcrun simctl list devices available 2>/dev/null | awk '/iPad/ { if (match($$0, /[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}/)) { print substr($$0, RSTART, RLENGTH); exit } }')
 
 ifeq ($(strip $(IPHONE_SIMULATOR_NAME)),)
 IPHONE_SIMULATOR_NAME := iPhone 17
@@ -71,13 +74,13 @@ help:
 	@echo ""
 	@echo "$(YELLOW)Build Targets:$(NC)"
 	@echo "  make build-mac    - Build for macOS"
-	@echo "  make build-ios    - Build for iOS (iPhone & iPad)"
+	@echo "  make build-ios    - Build for iPad (alias for build-ipad)"
 	@echo "  make build-ipad   - Build for iPad only"
 	@echo "  make build-all    - Build for all platforms"
 	@echo ""
 	@echo "$(YELLOW)Deploy Targets:$(NC)"
 	@echo "  make deploy-mac   - Build and run on macOS"
-	@echo "  make deploy-ios   - Build and deploy to iPhone Simulator"
+	@echo "  make deploy-ios   - Deploy to iPad Simulator (alias for deploy-ipad)"
 	@echo "  make deploy-ipad  - Build and deploy to iPad Simulator"
 	@echo "  make deploy       - Deploy to all platforms"
 	@echo ""
@@ -85,7 +88,7 @@ help:
 	@echo "  make clean        - Clean all build artifacts"
 	@echo "  make test         - Run unit tests"
 	@echo "  make run          - Build and run on macOS"
-	@echo "  make run-ios      - Build and run on iPhone Simulator"
+	@echo "  make run-ios      - Run on iPad Simulator (alias for run-ipad)"
 	@echo "  make run-ipad     - Build and run on iPad Simulator"
 	@echo "  make icons        - Generate app icons from qw_logo.png"
 	@echo "  make check-tools  - Verify required tools are installed"
@@ -186,31 +189,7 @@ build-mac: check-tools
 #------------------------------------------------------------------------------
 # Build for iOS (iPhone)
 #------------------------------------------------------------------------------
-build-ios: check-tools
-	@echo "$(YELLOW)Building for iOS (iPhone)...$(NC)"
-	@mkdir -p $(BUILD_DIR)/ios
-	@set -o pipefail; \
-	xcodebuild build \
-		-project $(XCODEPROJ) \
-		-scheme $(SCHEME) \
-		-destination $(IPHONE_DESTINATION) \
-		-configuration Release \
-		-derivedDataPath $(DERIVED_DATA_IOS) \
-		DEVELOPMENT_TEAM=$(TEAM_ID) \
-		CODE_SIGN_IDENTITY="-" \
-		CODE_SIGNING_REQUIRED=NO \
-		CODE_SIGNING_ALLOWED=NO \
-		| xcbeautify || xcodebuild build \
-			-project $(XCODEPROJ) \
-			-scheme $(SCHEME) \
-			-destination $(IPHONE_DESTINATION) \
-			-configuration Release \
-			-derivedDataPath $(DERIVED_DATA_IOS) \
-			DEVELOPMENT_TEAM=$(TEAM_ID) \
-			CODE_SIGN_IDENTITY="-" \
-			CODE_SIGNING_REQUIRED=NO \
-			CODE_SIGNING_ALLOWED=NO
-	@echo "$(GREEN)iOS (iPhone) build complete$(NC)"
+build-ios: build-ipad
 
 #------------------------------------------------------------------------------
 # Build for iPadOS (iPad)
@@ -271,19 +250,7 @@ deploy-mac: build-mac
 #------------------------------------------------------------------------------
 # Deploy to iPhone Simulator
 #------------------------------------------------------------------------------
-deploy-ios: build-ios
-	@echo "$(YELLOW)Deploying to iPhone Simulator...$(NC)"
-	@xcrun simctl boot "$(IPHONE_SIMULATOR_NAME)" 2>/dev/null || true
-	@open -a Simulator
-	@APP_PATH=$$(find $(DERIVED_DATA_IOS) -name "$(PROJECT_NAME).app" -path "*iphonesimulator*" | head -1) && \
-	if [ -n "$$APP_PATH" ]; then \
-		xcrun simctl install booted "$$APP_PATH" && \
-		xcrun simctl launch booted muonium.qw && \
-		echo "$(GREEN)App deployed to iPhone Simulator$(NC)"; \
-	else \
-		echo "$(RED)Error: Could not find iOS app$(NC)"; \
-		exit 1; \
-	fi
+deploy-ios: deploy-ipad
 
 #------------------------------------------------------------------------------
 # Deploy to iPad Simulator
@@ -294,7 +261,11 @@ deploy-ipad: build-ipad
 		echo "$(RED)Error: No available iPad simulator found. Install an iPad simulator in Xcode > Settings > Platforms.$(NC)"; \
 		exit 1; \
 	fi
-	@xcrun simctl boot "$(IPAD_SIMULATOR_NAME)" 2>/dev/null || true
+	@if [ -n "$(IPAD_SIMULATOR_ID)" ]; then \
+		xcrun simctl boot "$(IPAD_SIMULATOR_ID)" 2>/dev/null || true; \
+	else \
+		xcrun simctl boot "$(IPAD_SIMULATOR_NAME)" 2>/dev/null || true; \
+	fi
 	@open -a Simulator
 	@APP_PATH=$$(find $(DERIVED_DATA_IPAD) -name "$(PROJECT_NAME).app" -path "*iphonesimulator*" | head -1) && \
 	if [ -n "$$APP_PATH" ]; then \
@@ -319,7 +290,7 @@ run: deploy-mac
 #------------------------------------------------------------------------------
 # Run on iPhone/iPad Simulator
 #------------------------------------------------------------------------------
-run-ios: deploy-ios
+run-ios: run-ipad
 
 run-ipad: deploy-ipad
 

@@ -110,6 +110,7 @@ struct CodeEditorView: View {
                 fontSize: settings.fontSize,
                 lineHeightMultiple: settings.lineHeight,
                 fontName: settings.selectedFont.fontName,
+                isReadOnly: isReadOnly,
                 onLineCountChange: { count in
                     // UIViewRepresentable.updateUIView can be invoked during SwiftUI's
                     // view update cycle; defer state writes to avoid runtime warnings.
@@ -711,6 +712,7 @@ struct iOSTextEditor: UIViewRepresentable {
     let fontSize: Double
     let lineHeightMultiple: Double
     let fontName: String
+    var isReadOnly: Bool = false
     let onLineCountChange: (Int) -> Void
     let onScrollChange: (CGFloat, CGFloat, CGFloat) -> Void  // offset, height, lineHeight
     
@@ -742,7 +744,7 @@ struct iOSTextEditor: UIViewRepresentable {
         let font = getFont()
         
         textView.delegate = context.coordinator
-        textView.isEditable = true
+        textView.isEditable = !isReadOnly
         textView.isSelectable = true
         textView.font = font
         textView.backgroundColor = UIColor(theme.background)
@@ -759,6 +761,7 @@ struct iOSTextEditor: UIViewRepresentable {
         applyParagraphStyle(paragraphStyle, to: textView, font: font)
         
         context.coordinator.currentFont = font
+        context.coordinator.isReadOnly = isReadOnly
         
         // Report initial line count
         let lineCount = text.components(separatedBy: "\n").count
@@ -774,6 +777,11 @@ struct iOSTextEditor: UIViewRepresentable {
         context.coordinator.parent = self
         let font = getFont()
         var needsHighlight = false
+
+        if context.coordinator.isReadOnly != isReadOnly {
+            context.coordinator.isReadOnly = isReadOnly
+            textView.isEditable = !isReadOnly
+        }
         
         if textView.text != text {
             let selectedRange = textView.selectedRange
@@ -842,6 +850,7 @@ struct iOSTextEditor: UIViewRepresentable {
         var themeName: String
         var currentFont: UIFont
         var lineHeightMultiple: Double
+        var isReadOnly: Bool
         private var isUpdating = false
         
         init(_ parent: iOSTextEditor) {
@@ -852,6 +861,12 @@ struct iOSTextEditor: UIViewRepresentable {
             self.themeName = parent.themeName
             self.currentFont = parent.getFont()
             self.lineHeightMultiple = parent.lineHeightMultiple
+            self.isReadOnly = parent.isReadOnly
+        }
+
+        func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText replacement: String) -> Bool {
+            // Block edits when opened in read-only mode.
+            return !isReadOnly
         }
         
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
@@ -866,7 +881,7 @@ struct iOSTextEditor: UIViewRepresentable {
         }
         
         func textViewDidChange(_ textView: UITextView) {
-            guard !isUpdating else { return }
+            guard !isUpdating, !isReadOnly else { return }
             
             parent.text = textView.text
             

@@ -157,99 +157,107 @@ struct SyntaxTheme {
         gutterBackground: NSColor(red: 0.137, green: 0.145, blue: 0.192, alpha: 1)
     )
     
-    static let solarizedDark = SyntaxTheme(
-        plain: NSColor(red: 0.514, green: 0.580, blue: 0.588, alpha: 1),
-        keyword: NSColor(red: 0.149, green: 0.545, blue: 0.824, alpha: 1),
-        string: NSColor(red: 0.165, green: 0.631, blue: 0.596, alpha: 1),
-        number: NSColor(red: 0.827, green: 0.212, blue: 0.510, alpha: 1),
-        comment: NSColor(red: 0.396, green: 0.482, blue: 0.514, alpha: 1),
-        function: NSColor(red: 0.149, green: 0.545, blue: 0.824, alpha: 1),
-        type: NSColor(red: 0.710, green: 0.537, blue: 0.000, alpha: 1),
-        property: NSColor(red: 0.514, green: 0.580, blue: 0.588, alpha: 1),
-        tag: NSColor(red: 0.827, green: 0.212, blue: 0.510, alpha: 1),
-        attribute: NSColor(red: 0.710, green: 0.537, blue: 0.000, alpha: 1),
-        punctuation: NSColor(red: 0.514, green: 0.580, blue: 0.588, alpha: 1),
-        heading: NSColor(red: 0.522, green: 0.600, blue: 0.000, alpha: 1),
-        link: NSColor(red: 0.149, green: 0.545, blue: 0.824, alpha: 1),
-        emphasis: NSColor(red: 0.827, green: 0.212, blue: 0.510, alpha: 1),
-        codeBlock: NSColor(red: 0.396, green: 0.482, blue: 0.514, alpha: 1),
-        background: NSColor(red: 0.000, green: 0.169, blue: 0.212, alpha: 1),
-        lineNumber: NSColor(red: 0.396, green: 0.482, blue: 0.514, alpha: 1),
-        gutterBackground: NSColor(red: 0.000, green: 0.149, blue: 0.192, alpha: 1)
-    )
-    
-    static let solarizedLight = SyntaxTheme(
-        plain: NSColor(red: 0.396, green: 0.482, blue: 0.514, alpha: 1),
-        keyword: NSColor(red: 0.149, green: 0.545, blue: 0.824, alpha: 1),
-        string: NSColor(red: 0.165, green: 0.631, blue: 0.596, alpha: 1),
-        number: NSColor(red: 0.827, green: 0.212, blue: 0.510, alpha: 1),
-        comment: NSColor(red: 0.576, green: 0.631, blue: 0.631, alpha: 1),
-        function: NSColor(red: 0.149, green: 0.545, blue: 0.824, alpha: 1),
-        type: NSColor(red: 0.710, green: 0.537, blue: 0.000, alpha: 1),
-        property: NSColor(red: 0.396, green: 0.482, blue: 0.514, alpha: 1),
-        tag: NSColor(red: 0.827, green: 0.212, blue: 0.510, alpha: 1),
-        attribute: NSColor(red: 0.710, green: 0.537, blue: 0.000, alpha: 1),
-        punctuation: NSColor(red: 0.396, green: 0.482, blue: 0.514, alpha: 1),
-        heading: NSColor(red: 0.522, green: 0.600, blue: 0.000, alpha: 1),
-        link: NSColor(red: 0.149, green: 0.545, blue: 0.824, alpha: 1),
-        emphasis: NSColor(red: 0.827, green: 0.212, blue: 0.510, alpha: 1),
-        codeBlock: NSColor(red: 0.576, green: 0.631, blue: 0.631, alpha: 1),
-        background: NSColor(red: 0.992, green: 0.965, blue: 0.890, alpha: 1),
-        lineNumber: NSColor(red: 0.576, green: 0.631, blue: 0.631, alpha: 1),
-        gutterBackground: NSColor(red: 0.972, green: 0.945, blue: 0.870, alpha: 1)
-    )
-    
-    func color(for tokenType: TokenType) -> NSColor {
-        switch tokenType {
-        case .plain: return plain
-        case .keyword: return keyword
-        case .string: return string
-        case .number: return number
-        case .comment: return comment
-        case .function: return function
-        case .type: return type
-        case .property: return property
-        case .tag: return tag
-        case .attribute: return attribute
-        case .punctuation: return punctuation
-        case .heading: return heading
-        case .link: return link
-        case .emphasis: return emphasis
-        case .codeBlock: return codeBlock
+    struct ExportCLI {
+        static func main(arguments: [String]) -> Int {
+            // Parse arguments
+            var inputPath: String?
+            var outputPath: String?
+            var format = "png"
+            var themeName = appSettings.themeName
+            var lineNumbers = appSettings.showLineNumbers
+            var fontSize: CGFloat = appSettings.fontSize
+            var fontName: String = appSettings.fontName
+            var showHelp = false
+
+            var i = 1
+            while i < arguments.count {
+                let arg = arguments[i]
+            
+                switch arg {
+                case "-h", "--help":
+                    showHelp = true
+                case "-o", "--output":
+                    i += 1
+                    if i < arguments.count { outputPath = arguments[i] }
+                case "-f", "--format":
+                    i += 1
+                    if i < arguments.count { format = arguments[i].lowercased() }
+                case "-t", "--theme":
+                    i += 1
+                    if i < arguments.count { themeName = arguments[i] }
+                case "-s", "--font-size":
+                    i += 1
+                    if i < arguments.count, let s = Double(arguments[i]) { fontSize = CGFloat(s) }
+                case "--no-line-numbers":
+                    lineNumbers = false
+                default:
+                    if !arg.hasPrefix("-") && inputPath == nil { inputPath = arg }
+                }
+                i += 1
+            }
+
+            if showHelp {
+                printUsage()
+                return 0
+            }
+
+            guard let input = inputPath else {
+                fputs("Error: No input file specified\n", stderr)
+                printUsage()
+                return 1
+            }
+
+            guard FileManager.default.fileExists(atPath: input) else {
+                fputs("Error: File not found: \(input)\n", stderr)
+                return 1
+            }
+
+            // Generate output path if not specified
+            let inputURL = URL(fileURLWithPath: input)
+            let output = outputPath ?? {
+                let baseName = inputURL.deletingPathExtension().lastPathComponent
+                let dir = inputURL.deletingLastPathComponent().path
+                return "\(dir)/\(baseName).\(format)"
+            }()
+
+            // Read and export
+            do {
+                let text = try String(contentsOfFile: input, encoding: .utf8)
+                let fileType = SupportedFileType.from(url: inputURL)
+                let theme = getTheme(named: themeName)
+            
+                let renderer = ScreenshotRenderer(
+                    text: text,
+                    fileType: fileType,
+                    theme: theme,
+                    includeLineNumbers: lineNumbers,
+                    fontSize: fontSize,
+                    fontName: fontName
+                )
+            
+                let outputURL = URL(fileURLWithPath: output)
+            
+                switch format {
+                case "png":
+                    try renderer.exportToPNG(to: outputURL)
+                case "pdf":
+                    try renderer.exportToPDF(to: outputURL)
+                default:
+                    fputs("Error: Unsupported format '\(format)'. Use 'png' or 'pdf'.\n", stderr)
+                    return 1
+                }
+            
+                print("Exported to: \(output)")
+                return 0
+            } catch {
+                fputs("Error: \(error.localizedDescription)\n", stderr)
+                return 1
+            }
         }
     }
-}
 
-// MARK: - Syntax Highlighter
-
-class SyntaxHighlighter {
-    let fileType: SupportedFileType
-    let theme: SyntaxTheme
-    
-    private static let pythonKeywords = Set([
-        "and", "as", "assert", "async", "await", "break", "class", "continue",
-        "def", "del", "elif", "else", "except", "False", "finally", "for",
-        "from", "global", "if", "import", "in", "is", "lambda", "None",
-        "nonlocal", "not", "or", "pass", "raise", "return", "True", "try",
-        "while", "with", "yield"
-    ])
-    
-    private static let javascriptKeywords = Set([
-        "async", "await", "break", "case", "catch", "class", "const", "continue",
-        "debugger", "default", "delete", "do", "else", "export", "extends",
-        "false", "finally", "for", "function", "if", "import", "in", "instanceof",
-        "let", "new", "null", "return", "static", "super", "switch", "this",
-        "throw", "true", "try", "typeof", "undefined", "var", "void", "while", "with", "yield"
-    ])
-    
-    private static let swiftKeywords = Set([
-        "actor", "any", "as", "associatedtype", "async", "await", "break", "case",
-        "catch", "class", "continue", "default", "defer", "deinit", "do", "else",
-        "enum", "extension", "fallthrough", "false", "fileprivate", "final", "for",
-        "func", "get", "guard", "if", "import", "in", "init", "inout", "internal",
-        "is", "lazy", "let", "mutating", "nil", "nonisolated", "open", "operator",
-        "override", "private", "protocol", "public", "repeat", "required", "rethrows",
-        "return", "self", "Self", "set", "some", "static", "struct", "subscript",
+    let exitCode = ExportCLI.main(arguments: CommandLine.arguments)
+    exit(exitCode)
         "super", "switch", "throw", "throws", "true", "try", "typealias", "var",
         "weak", "where", "while"
     ])
@@ -702,11 +710,12 @@ func printUsage() {
     
     Options:
       -o, --output FILE      Output file path (default: input.png/pdf)
-      -f, --format FORMAT    Output format: png, pdf (default: png)
-      -t, --theme THEME      Theme: dark, light, monokai, dracula,
-                             solarized-dark, solarized-light
-      -s, --font-size SIZE   Font size in points (default: 13)
-      --no-line-numbers      Hide line numbers
+            -f, --format FORMAT    Output format: png, pdf (default: png)
+            -t, --theme THEME      Theme: dark, light, monokai, dracula,
+                                                         solarized-dark, solarized-light, nord,
+                                                         one-dark, github
+            -s, --font-size SIZE   Font size in points (default: QW settings)
+            --no-line-numbers      Hide line numbers (default: QW settings)
       -h, --help             Show this help
     
     Examples:
@@ -724,99 +733,178 @@ func getTheme(named name: String) -> SyntaxTheme {
     case "dracula": return .dracula
     case "solarized-dark", "solarized_dark": return .solarizedDark
     case "solarized-light", "solarized_light": return .solarizedLight
+    case "nord": return .nord
+    case "one-dark", "one_dark", "onedark": return .oneDark
+    case "github", "github-light", "github_light": return .github
     default: return .dark
     }
 }
 
-// Parse arguments
-var inputPath: String?
-var outputPath: String?
-var format = "png"
-var themeName = "dark"
-var lineNumbers = true
-var fontSize: CGFloat = 13
-var showHelp = false
-
-var i = 1
-while i < CommandLine.arguments.count {
-    let arg = CommandLine.arguments[i]
-    
-    switch arg {
-    case "-h", "--help":
-        showHelp = true
-    case "-o", "--output":
-        i += 1
-        if i < CommandLine.arguments.count { outputPath = CommandLine.arguments[i] }
-    case "-f", "--format":
-        i += 1
-        if i < CommandLine.arguments.count { format = CommandLine.arguments[i].lowercased() }
-    case "-t", "--theme":
-        i += 1
-        if i < CommandLine.arguments.count { themeName = CommandLine.arguments[i] }
-    case "-s", "--font-size":
-        i += 1
-        if i < CommandLine.arguments.count, let s = Double(CommandLine.arguments[i]) { fontSize = CGFloat(s) }
-    case "--no-line-numbers":
-        lineNumbers = false
-    default:
-        if !arg.hasPrefix("-") && inputPath == nil { inputPath = arg }
-    }
-    i += 1
+private struct AppSettings {
+    let themeName: String
+    let fontName: String
+    let fontSize: CGFloat
+    let showLineNumbers: Bool
 }
 
-if showHelp {
-    printUsage()
-    exit(0)
-}
+private func loadAppSettings() -> AppSettings {
+    let defaults = UserDefaults.standard
+    let storedTheme = defaults.string(forKey: "editorTheme") ?? "System"
+    let storedFont = defaults.string(forKey: "editorFontName") ?? "System Mono"
+    let storedFontSize = defaults.double(forKey: "editorFontSize")
+    let storedLineNumbers = defaults.object(forKey: "showLineNumbers") as? Bool ?? true
 
-guard let input = inputPath else {
-    fputs("Error: No input file specified\n", stderr)
-    printUsage()
-    exit(1)
-}
+    let resolvedTheme = resolveThemeName(storedTheme)
+    let resolvedFont = resolveFontName(storedFont)
+    let resolvedFontSize = storedFontSize > 0 ? CGFloat(storedFontSize) : 14
 
-guard FileManager.default.fileExists(atPath: input) else {
-    fputs("Error: File not found: \(input)\n", stderr)
-    exit(1)
-}
-
-// Generate output path if not specified
-let inputURL = URL(fileURLWithPath: input)
-let output = outputPath ?? {
-    let baseName = inputURL.deletingPathExtension().lastPathComponent
-    let dir = inputURL.deletingLastPathComponent().path
-    return "\(dir)/\(baseName).\(format)"
-}()
-
-// Read and export
-do {
-    let text = try String(contentsOfFile: input, encoding: .utf8)
-    let fileType = SupportedFileType.from(url: inputURL)
-    let theme = getTheme(named: themeName)
-    
-    let renderer = ScreenshotRenderer(
-        text: text,
-        fileType: fileType,
-        theme: theme,
-        includeLineNumbers: lineNumbers,
-        fontSize: fontSize
+    return AppSettings(
+        themeName: resolvedTheme,
+        fontName: resolvedFont,
+        fontSize: resolvedFontSize,
+        showLineNumbers: storedLineNumbers
     )
-    
-    let outputURL = URL(fileURLWithPath: output)
-    
-    switch format {
-    case "png":
-        try renderer.exportToPNG(to: outputURL)
-    case "pdf":
-        try renderer.exportToPDF(to: outputURL)
-    default:
-        fputs("Error: Unsupported format '\(format)'. Use 'png' or 'pdf'.\n", stderr)
-        exit(1)
-    }
-    
-    print("Exported to: \(output)")
-    exit(0)
-} catch {
-    fputs("Error: \(error.localizedDescription)\n", stderr)
-    exit(1)
 }
+
+private func resolveThemeName(_ storedTheme: String) -> String {
+    let normalized = storedTheme.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    switch normalized {
+    case "system":
+        if let match = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]),
+           match == .darkAqua {
+            return "dark"
+        }
+        return "light"
+    case "light": return "light"
+    case "dark": return "dark"
+    case "solarized light": return "solarized-light"
+    case "solarized dark": return "solarized-dark"
+    case "monokai": return "monokai"
+    case "dracula": return "dracula"
+    case "nord": return "nord"
+    case "one dark": return "one-dark"
+    case "github": return "github"
+    default:
+        return normalized
+    }
+}
+
+private func resolveFontName(_ storedFont: String) -> String {
+    switch storedFont {
+    case "System Mono": return "Menlo"
+    case "SF Mono": return "SFMono-Regular"
+    case "Menlo": return "Menlo"
+    case "Monaco": return "Monaco"
+    case "Courier New": return "Courier New"
+    case "Source Code Pro": return "SourceCodePro-Regular"
+    case "JetBrains Mono": return "JetBrainsMono-Regular"
+    case "Fira Code": return "FiraCode-Regular"
+    case "Hack": return "Hack-Regular"
+    case "Inconsolata": return "Inconsolata-Regular"
+    default: return storedFont
+    }
+}
+
+let appSettings = loadAppSettings()
+
+struct ExportCLI {
+    static func main(arguments: [String]) -> Int {
+        // Parse arguments
+        var inputPath: String?
+        var outputPath: String?
+        var format = "png"
+        var themeName = appSettings.themeName
+        var lineNumbers = appSettings.showLineNumbers
+        var fontSize: CGFloat = appSettings.fontSize
+        var fontName: String = appSettings.fontName
+        var showHelp = false
+
+        var i = 1
+        while i < arguments.count {
+            let arg = arguments[i]
+            
+            switch arg {
+            case "-h", "--help":
+                showHelp = true
+            case "-o", "--output":
+                i += 1
+                if i < arguments.count { outputPath = arguments[i] }
+            case "-f", "--format":
+                i += 1
+                if i < arguments.count { format = arguments[i].lowercased() }
+            case "-t", "--theme":
+                i += 1
+                if i < arguments.count { themeName = arguments[i] }
+            case "-s", "--font-size":
+                i += 1
+                if i < arguments.count, let s = Double(arguments[i]) { fontSize = CGFloat(s) }
+            case "--no-line-numbers":
+                lineNumbers = false
+            default:
+                if !arg.hasPrefix("-") && inputPath == nil { inputPath = arg }
+            }
+            i += 1
+        }
+
+        if showHelp {
+            printUsage()
+            return 0
+        }
+
+        guard let input = inputPath else {
+            fputs("Error: No input file specified\n", stderr)
+            printUsage()
+            return 1
+        }
+
+        guard FileManager.default.fileExists(atPath: input) else {
+            fputs("Error: File not found: \(input)\n", stderr)
+            return 1
+        }
+
+        // Generate output path if not specified
+        let inputURL = URL(fileURLWithPath: input)
+        let output = outputPath ?? {
+            let baseName = inputURL.deletingPathExtension().lastPathComponent
+            let dir = inputURL.deletingLastPathComponent().path
+            return "\(dir)/\(baseName).\(format)"
+        }()
+
+        // Read and export
+        do {
+            let text = try String(contentsOfFile: input, encoding: .utf8)
+            let fileType = SupportedFileType.from(url: inputURL)
+            let theme = getTheme(named: themeName)
+            
+            let renderer = ScreenshotRenderer(
+                text: text,
+                fileType: fileType,
+                theme: theme,
+                includeLineNumbers: lineNumbers,
+                fontSize: fontSize,
+                fontName: fontName
+            )
+            
+            let outputURL = URL(fileURLWithPath: output)
+            
+            switch format {
+            case "png":
+                try renderer.exportToPNG(to: outputURL)
+            case "pdf":
+                try renderer.exportToPDF(to: outputURL)
+            default:
+                fputs("Error: Unsupported format '\(format)'. Use 'png' or 'pdf'.\n", stderr)
+                return 1
+            }
+            
+            print("Exported to: \(output)")
+            return 0
+        } catch {
+            fputs("Error: \(error.localizedDescription)\n", stderr)
+            return 1
+        }
+    }
+}
+
+let exitCode = ExportCLI.main(arguments: CommandLine.arguments)
+exit(exitCode)

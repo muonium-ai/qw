@@ -11,7 +11,9 @@ TEAM_ID := 3CSC2UMR4Q
 
 # Build directories
 BUILD_DIR := build
-DERIVED_DATA := $(BUILD_DIR)/DerivedData
+DERIVED_DATA_MAC := $(BUILD_DIR)/DerivedData-mac
+DERIVED_DATA_IOS := $(BUILD_DIR)/DerivedData-ios
+DERIVED_DATA_IPAD := $(BUILD_DIR)/DerivedData-ipad
 
 # Deployment targets
 MACOS_DEPLOYMENT_TARGET := 15.0
@@ -23,8 +25,25 @@ ICON_DIR := $(PROJECT_DIR)/$(PROJECT_NAME)/Assets.xcassets/AppIcon.appiconset
 
 # Simulator destinations
 MAC_DESTINATION := "platform=macOS"
-IPHONE_DESTINATION := "platform=iOS Simulator,name=iPhone 17"
-IPAD_DESTINATION := "platform=iOS Simulator,name=iPad Pro 13-inch (M4)"
+IPHONE_SIMULATOR_NAME := $(shell xcrun simctl list devices available 2>/dev/null | awk -F'[()]' '/iPhone/ {print $$1; exit}' | sed 's/^[[:space:]]*//;s/[[:space:]]*$$//')
+IPAD_SIMULATOR_NAME := $(shell xcrun simctl list devices available 2>/dev/null | awk -F'[()]' '/iPad/ {print $$1; exit}' | sed 's/^[[:space:]]*//;s/[[:space:]]*$$//')
+IPHONE_SIMULATOR_ID := $(shell xcrun simctl list devices available 2>/dev/null | awk -F'[()]' '/iPhone/ {print $$2; exit}')
+IPAD_SIMULATOR_ID := $(shell xcrun simctl list devices available 2>/dev/null | awk -F'[()]' '/iPad/ {print $$2; exit}')
+
+ifeq ($(strip $(IPHONE_SIMULATOR_NAME)),)
+IPHONE_SIMULATOR_NAME := iPhone 17
+endif
+ifneq ($(strip $(IPHONE_SIMULATOR_ID)),)
+IPHONE_DESTINATION := "platform=iOS Simulator,id=$(IPHONE_SIMULATOR_ID)"
+else
+IPHONE_DESTINATION := "platform=iOS Simulator,name=$(IPHONE_SIMULATOR_NAME)"
+endif
+
+ifneq ($(strip $(IPAD_SIMULATOR_ID)),)
+IPAD_DESTINATION := "platform=iOS Simulator,id=$(IPAD_SIMULATOR_ID)"
+else ifneq ($(strip $(IPAD_SIMULATOR_NAME)),)
+IPAD_DESTINATION := "platform=iOS Simulator,name=$(IPAD_SIMULATOR_NAME)"
+endif
 
 # Device destinations (for actual devices)
 IPHONE_DEVICE := "platform=iOS,name=iPhone"
@@ -37,8 +56,8 @@ RED := \033[0;31m
 NC := \033[0m # No Color
 
 .PHONY: all clean build build-mac build-ios build-ipad build-all \
-        deploy deploy-mac deploy-ios deploy-ipad \
-        test run icons help check-tools install install-cli uninstall
+	deploy deploy-mac deploy-ios deploy-ipad \
+	test run run-ios run-ipad icons help check-tools install install-cli uninstall
 
 # Default target
 all: build-all
@@ -66,6 +85,8 @@ help:
 	@echo "  make clean        - Clean all build artifacts"
 	@echo "  make test         - Run unit tests"
 	@echo "  make run          - Build and run on macOS"
+	@echo "  make run-ios      - Build and run on iPhone Simulator"
+	@echo "  make run-ipad     - Build and run on iPad Simulator"
 	@echo "  make icons        - Generate app icons from qw_logo.png"
 	@echo "  make check-tools  - Verify required tools are installed"
 	@echo ""
@@ -139,12 +160,13 @@ icons:
 build-mac: check-tools
 	@echo "$(YELLOW)Building for macOS...$(NC)"
 	@mkdir -p $(BUILD_DIR)/mac
+	@set -o pipefail; \
 	xcodebuild build \
 		-project $(XCODEPROJ) \
 		-scheme $(SCHEME) \
 		-destination $(MAC_DESTINATION) \
 		-configuration Release \
-		-derivedDataPath $(DERIVED_DATA) \
+		-derivedDataPath $(DERIVED_DATA_MAC) \
 		DEVELOPMENT_TEAM=$(TEAM_ID) \
 		CODE_SIGN_IDENTITY="-" \
 		CODE_SIGNING_REQUIRED=NO \
@@ -154,7 +176,7 @@ build-mac: check-tools
 			-scheme $(SCHEME) \
 			-destination $(MAC_DESTINATION) \
 			-configuration Release \
-			-derivedDataPath $(DERIVED_DATA) \
+			-derivedDataPath $(DERIVED_DATA_MAC) \
 			DEVELOPMENT_TEAM=$(TEAM_ID) \
 			CODE_SIGN_IDENTITY="-" \
 			CODE_SIGNING_REQUIRED=NO \
@@ -167,12 +189,13 @@ build-mac: check-tools
 build-ios: check-tools
 	@echo "$(YELLOW)Building for iOS (iPhone)...$(NC)"
 	@mkdir -p $(BUILD_DIR)/ios
+	@set -o pipefail; \
 	xcodebuild build \
 		-project $(XCODEPROJ) \
 		-scheme $(SCHEME) \
 		-destination $(IPHONE_DESTINATION) \
 		-configuration Release \
-		-derivedDataPath $(DERIVED_DATA) \
+		-derivedDataPath $(DERIVED_DATA_IOS) \
 		DEVELOPMENT_TEAM=$(TEAM_ID) \
 		CODE_SIGN_IDENTITY="-" \
 		CODE_SIGNING_REQUIRED=NO \
@@ -182,7 +205,7 @@ build-ios: check-tools
 			-scheme $(SCHEME) \
 			-destination $(IPHONE_DESTINATION) \
 			-configuration Release \
-			-derivedDataPath $(DERIVED_DATA) \
+			-derivedDataPath $(DERIVED_DATA_IOS) \
 			DEVELOPMENT_TEAM=$(TEAM_ID) \
 			CODE_SIGN_IDENTITY="-" \
 			CODE_SIGNING_REQUIRED=NO \
@@ -194,13 +217,18 @@ build-ios: check-tools
 #------------------------------------------------------------------------------
 build-ipad: check-tools
 	@echo "$(YELLOW)Building for iPadOS (iPad)...$(NC)"
+	@if [ -z "$(IPAD_SIMULATOR_ID)" ] && [ -z "$(IPAD_SIMULATOR_NAME)" ]; then \
+		echo "$(RED)Error: No available iPad simulator found. Install an iPad simulator in Xcode > Settings > Platforms.$(NC)"; \
+		exit 1; \
+	fi
 	@mkdir -p $(BUILD_DIR)/ipad
+	@set -o pipefail; \
 	xcodebuild build \
 		-project $(XCODEPROJ) \
 		-scheme $(SCHEME) \
 		-destination $(IPAD_DESTINATION) \
 		-configuration Release \
-		-derivedDataPath $(DERIVED_DATA) \
+		-derivedDataPath $(DERIVED_DATA_IPAD) \
 		DEVELOPMENT_TEAM=$(TEAM_ID) \
 		CODE_SIGN_IDENTITY="-" \
 		CODE_SIGNING_REQUIRED=NO \
@@ -210,7 +238,7 @@ build-ipad: check-tools
 			-scheme $(SCHEME) \
 			-destination $(IPAD_DESTINATION) \
 			-configuration Release \
-			-derivedDataPath $(DERIVED_DATA) \
+			-derivedDataPath $(DERIVED_DATA_IPAD) \
 			DEVELOPMENT_TEAM=$(TEAM_ID) \
 			CODE_SIGN_IDENTITY="-" \
 			CODE_SIGNING_REQUIRED=NO \
@@ -220,7 +248,7 @@ build-ipad: check-tools
 #------------------------------------------------------------------------------
 # Build All Platforms
 #------------------------------------------------------------------------------
-build-all: build-mac build-ios
+build-all: build-mac build-ios build-ipad
 	@echo "$(GREEN)All platform builds complete$(NC)"
 
 build: build-mac
@@ -231,7 +259,7 @@ build: build-mac
 deploy-mac: build-mac
 	@echo "$(YELLOW)Deploying to macOS...$(NC)"
 	@killall qw 2>/dev/null || true
-	@APP_PATH=$$(find $(DERIVED_DATA) -name "$(PROJECT_NAME).app" -path "*/Release/*" | head -1) && \
+	@APP_PATH=$$(find $(DERIVED_DATA_MAC) -name "$(PROJECT_NAME).app" -path "*/Release/*" | head -1) && \
 	if [ -n "$$APP_PATH" ]; then \
 		open "$$APP_PATH"; \
 		echo "$(GREEN)App launched: $$APP_PATH$(NC)"; \
@@ -245,9 +273,9 @@ deploy-mac: build-mac
 #------------------------------------------------------------------------------
 deploy-ios: build-ios
 	@echo "$(YELLOW)Deploying to iPhone Simulator...$(NC)"
-	@xcrun simctl boot "iPhone 16 Pro" 2>/dev/null || true
+	@xcrun simctl boot "$(IPHONE_SIMULATOR_NAME)" 2>/dev/null || true
 	@open -a Simulator
-	@APP_PATH=$$(find $(DERIVED_DATA) -name "$(PROJECT_NAME).app" -path "*iphonesimulator*" | head -1) && \
+	@APP_PATH=$$(find $(DERIVED_DATA_IOS) -name "$(PROJECT_NAME).app" -path "*iphonesimulator*" | head -1) && \
 	if [ -n "$$APP_PATH" ]; then \
 		xcrun simctl install booted "$$APP_PATH" && \
 		xcrun simctl launch booted muonium.qw && \
@@ -262,9 +290,13 @@ deploy-ios: build-ios
 #------------------------------------------------------------------------------
 deploy-ipad: build-ipad
 	@echo "$(YELLOW)Deploying to iPad Simulator...$(NC)"
-	@xcrun simctl boot "iPad Pro 13-inch (M4)" 2>/dev/null || true
+	@if [ -z "$(IPAD_SIMULATOR_ID)" ] && [ -z "$(IPAD_SIMULATOR_NAME)" ]; then \
+		echo "$(RED)Error: No available iPad simulator found. Install an iPad simulator in Xcode > Settings > Platforms.$(NC)"; \
+		exit 1; \
+	fi
+	@xcrun simctl boot "$(IPAD_SIMULATOR_NAME)" 2>/dev/null || true
 	@open -a Simulator
-	@APP_PATH=$$(find $(DERIVED_DATA) -name "$(PROJECT_NAME).app" -path "*iphonesimulator*" | head -1) && \
+	@APP_PATH=$$(find $(DERIVED_DATA_IPAD) -name "$(PROJECT_NAME).app" -path "*iphonesimulator*" | head -1) && \
 	if [ -n "$$APP_PATH" ]; then \
 		xcrun simctl install booted "$$APP_PATH" && \
 		xcrun simctl launch booted muonium.qw && \
@@ -285,20 +317,28 @@ deploy: deploy-mac
 run: deploy-mac
 
 #------------------------------------------------------------------------------
+# Run on iPhone/iPad Simulator
+#------------------------------------------------------------------------------
+run-ios: deploy-ios
+
+run-ipad: deploy-ipad
+
+#------------------------------------------------------------------------------
 # Run Tests
 #------------------------------------------------------------------------------
 test: check-tools
 	@echo "$(YELLOW)Running tests...$(NC)"
+	@set -o pipefail; \
 	xcodebuild test \
 		-project $(XCODEPROJ) \
 		-scheme $(SCHEME) \
 		-destination $(MAC_DESTINATION) \
-		-derivedDataPath $(DERIVED_DATA) \
+		-derivedDataPath $(DERIVED_DATA_MAC) \
 		| xcbeautify || xcodebuild test \
 			-project $(XCODEPROJ) \
 			-scheme $(SCHEME) \
 			-destination $(MAC_DESTINATION) \
-			-derivedDataPath $(DERIVED_DATA)
+			-derivedDataPath $(DERIVED_DATA_MAC)
 	@echo "$(GREEN)Tests complete$(NC)"
 
 #------------------------------------------------------------------------------
@@ -335,7 +375,7 @@ install: build-mac install-cli
 	@if [ -d "/Applications/qw.app" ]; then \
 		rm -rf "/Applications/qw.app"; \
 	fi
-	@cp -R "$(DERIVED_DATA)/Build/Products/Release/qw.app" "/Applications/"
+	@cp -R "$(DERIVED_DATA_MAC)/Build/Products/Release/qw.app" "/Applications/"
 	@echo "$(GREEN)QW Editor installed to /Applications/qw.app$(NC)"
 	@echo "$(GREEN)You can now use 'qw' command from terminal$(NC)"
 

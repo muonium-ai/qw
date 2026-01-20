@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import Foundation
 
@@ -189,3 +190,4 @@ enum CodeRender {
         return data
     }
 }
+#endif

@@ -1,0 +1,3 @@
+[submodule "vendor/pygments-swift"]
+	path = vendor/pygments-swift
+	url = https://github.com/muonium-ai/pygments-swift.git

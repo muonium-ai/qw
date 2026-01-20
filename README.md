@@ -65,17 +65,19 @@ make build-all
 make run
 ```
 
-- Deploy to iPhone Simulator:
+- Deploy to iPad Simulator (alias: `deploy-ios`):
+
+```bash
+make deploy-ipad
+```
+
+You can also use the legacy alias:
 
 ```bash
 make deploy-ios
 ```
 
-- Deploy to iPad Simulator:
-
-```bash
-make deploy-ipad
-```
+Note: The app is currently configured as **iPad-only** (iPhone is ineligible by design).
 
 ## Build (xcodebuild directly)
 
@@ -223,6 +225,31 @@ Verify exported PDFs/PNGs:
 - Product/agent notes live in:
   - `requirements/QW_PRD.md`
   - `requirements/agents.md`
+
+## Vendored dependency: `pygments-swift`
+
+The syntax highlighting engine is developed in a separate repo and is included here as a **git submodule** at `vendor/pygments-swift`.
+
+Clone this repo with submodules:
+
+```bash
+git clone --recurse-submodules git@github.com:muonium-ai/qw.git
+```
+
+If you already cloned without submodules:
+
+```bash
+git submodule update --init --recursive
+```
+
+Update the submodule to the latest upstream commit (then commit the pointer in this repo):
+
+```bash
+git submodule update --remote --merge vendor/pygments-swift
+git add vendor/pygments-swift
+git commit -m "Update pygments-swift submodule"
+git push
+```
 
 ---
 

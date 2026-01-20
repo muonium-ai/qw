@@ -425,17 +425,25 @@ class DocumentExporter {
             throw ExportError.pngCreationFailed
         }
         
+        let flippedContext = NSGraphicsContext(cgContext: context.cgContext, flipped: true)
         NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = context
-        
-        // Fill background
-        NSColor(theme.background).setFill()
-        NSRect(x: 0, y: 0, width: width, height: height).fill()
-        
-        // Draw text
-        let drawPoint = NSPoint(x: padding, y: padding)
-        layoutManager.drawBackground(forGlyphRange: NSRange(location: 0, length: textStorage.length), at: drawPoint)
-        layoutManager.drawGlyphs(forGlyphRange: NSRange(location: 0, length: textStorage.length), at: drawPoint)
+        NSGraphicsContext.current = flippedContext
+        flippedContext.imageInterpolation = .high
+
+        // Draw via NSTextView to preserve correct line order and text orientation
+        let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: width, height: height))
+        textView.isEditable = false
+        textView.isSelectable = false
+        textView.drawsBackground = true
+        textView.backgroundColor = NSColor(theme.background)
+        textView.textContainerInset = NSSize(width: padding, height: padding)
+        textView.textContainer?.lineFragmentPadding = 0
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.heightTracksTextView = false
+        textView.textContainer?.size = NSSize(width: width - padding * 2, height: height - padding * 2)
+        textView.textStorage?.setAttributedString(attributedString)
+        textView.layoutManager?.ensureLayout(for: textView.textContainer!)
+        textView.draw(textView.bounds)
         
         NSGraphicsContext.restoreGraphicsState()
         

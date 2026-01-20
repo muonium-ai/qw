@@ -600,7 +600,6 @@ struct MacOSTextEditor: NSViewRepresentable {
             // Calculate line and column
             var line = 1
             var column = 1
-            var currentIndex = 0
             
             for (index, char) in text.enumerated() {
                 if index >= cursorPosition {
@@ -612,7 +611,6 @@ struct MacOSTextEditor: NSViewRepresentable {
                 } else {
                     column += 1
                 }
-                currentIndex = index + 1
             }
             
             // Handle cursor at end of text

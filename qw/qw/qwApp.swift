@@ -272,7 +272,7 @@ struct qwApp: App {
                     // Open the document
                     NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { _, _, error in
                         if let error = error {
-                            print("Error opening document: \\(error)")
+                            print("Error opening document: \(error)")
                         }
                     }
                 }

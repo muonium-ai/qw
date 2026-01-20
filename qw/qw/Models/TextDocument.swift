@@ -50,19 +50,7 @@ struct TextDocument: FileDocument {
     var fileType: SupportedFileType
     
     static var readableContentTypes: [UTType] {
-        var types: [UTType] = [
-            .plainText,
-            .json,
-            .yaml,
-            .html,
-            .javaScript,
-            .pythonScript,
-            .swiftSource
-        ]
-        if let md = UTType(filenameExtension: "md") { types.append(md) }
-        if let css = UTType(filenameExtension: "css") { types.append(css) }
-        if let yml = UTType(filenameExtension: "yml") { types.append(yml) }
-        return types
+        [.item]
     }
     
     static var writableContentTypes: [UTType] {

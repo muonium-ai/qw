@@ -213,7 +213,7 @@ struct DocumentEditorView: View {
             fontName: settings.selectedFont.fontName
         )
         
-        let defaultName = fileURL?.deletingPathExtension().lastPathComponent ?? "Untitled"
+        let defaultName = fileURL?.lastPathComponent ?? "Untitled"
         exporter.showPDFExportDialog(defaultName: defaultName)
     }
     
@@ -229,7 +229,7 @@ struct DocumentEditorView: View {
             fontName: settings.selectedFont.fontName
         )
         
-        let defaultName = fileURL?.deletingPathExtension().lastPathComponent ?? "Untitled"
+        let defaultName = fileURL?.lastPathComponent ?? "Untitled"
         exporter.showPNGExportDialog(defaultName: defaultName)
     }
     #endif

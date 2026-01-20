@@ -280,7 +280,10 @@ class DocumentExporter {
         savePanel.title = "Export as PDF"
         savePanel.message = "Choose a location to save the PDF"
         savePanel.nameFieldLabel = "File Name:"
-        savePanel.nameFieldStringValue = "\(defaultName).pdf"
+        let normalizedName = defaultName.lowercased().hasSuffix(".pdf")
+            ? defaultName
+            : "\(defaultName).pdf"
+        savePanel.nameFieldStringValue = normalizedName
         
         // Capture self strongly to keep exporter alive until export completes
         savePanel.begin { response in
@@ -315,7 +318,10 @@ class DocumentExporter {
         savePanel.title = "Export as PNG"
         savePanel.message = "Choose a location to save the image"
         savePanel.nameFieldLabel = "File Name:"
-        savePanel.nameFieldStringValue = "\(defaultName).png"
+        let normalizedName = defaultName.lowercased().hasSuffix(".png")
+            ? defaultName
+            : "\(defaultName).png"
+        savePanel.nameFieldStringValue = normalizedName
         
         // Capture self strongly to keep exporter alive until export completes
         savePanel.begin { response in

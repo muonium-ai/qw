@@ -76,34 +76,18 @@ class EditorSettingsManager: ObservableObject {
     static let shared = EditorSettingsManager()
     
     // Font settings
-    @AppStorage("editorFontName") var fontName: String = ProgrammingFont.system.rawValue {
-        didSet { objectWillChange.send() }
-    }
-    @AppStorage("editorFontSize") var fontSize: Double = 14 {
-        didSet { objectWillChange.send() }
-    }
-    
+    @AppStorage("editorFontName") var fontName: String = ProgrammingFont.system.rawValue
+    @AppStorage("editorFontSize") var fontSize: Double = 14
+
     // Theme settings
-    @AppStorage("editorTheme") var themeName: String = EditorThemeName.system.rawValue {
-        didSet { objectWillChange.send() }
-    }
-    
+    @AppStorage("editorTheme") var themeName: String = EditorThemeName.system.rawValue
+
     // Display settings
-    @AppStorage("showLineNumbers") var showLineNumbers: Bool = true {
-        didSet { objectWillChange.send() }
-    }
-    @AppStorage("lineHeight") var lineHeight: Double = 1.4 {
-        didSet { objectWillChange.send() }
-    }
-    @AppStorage("tabWidth") var tabWidth: Int = 4 {
-        didSet { objectWillChange.send() }
-    }
-    @AppStorage("insertSpacesForTab") var insertSpacesForTab: Bool = true {
-        didSet { objectWillChange.send() }
-    }
-    @AppStorage("wordWrap") var wordWrap: Bool = true {
-        didSet { objectWillChange.send() }
-    }
+    @AppStorage("showLineNumbers") var showLineNumbers: Bool = true
+    @AppStorage("lineHeight") var lineHeight: Double = 1.4
+    @AppStorage("tabWidth") var tabWidth: Int = 4
+    @AppStorage("insertSpacesForTab") var insertSpacesForTab: Bool = true
+    @AppStorage("wordWrap") var wordWrap: Bool = true
     
     var selectedFont: ProgrammingFont {
         ProgrammingFont(rawValue: fontName) ?? .system

@@ -205,7 +205,7 @@ class DocumentExporter {
     
     // MARK: - Print
     
-    func print() {
+    func printDocument() {
         let attributedString = createAttributedString()
         
         // Create text view for printing
@@ -287,23 +287,23 @@ class DocumentExporter {
         
         // Capture self strongly to keep exporter alive until export completes
         savePanel.begin { response in
-            Swift.print("[PDF Export] Save panel response: \(response == .OK ? "OK" : "Cancelled")")
+            print("[PDF Export] Save panel response: \(response == .OK ? "OK" : "Cancelled")")
             if response == .OK, let url = savePanel.url {
-                Swift.print("[PDF Export] Target URL: \(url.path)")
+                print("[PDF Export] Target URL: \(url.path)")
                 do {
                     try self.exportToPDF(to: url)
                     // Verify file was created
                     if FileManager.default.fileExists(atPath: url.path) {
                         let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
                         let size = attrs?[.size] as? Int ?? 0
-                        Swift.print("[PDF Export] SUCCESS - File created: \(url.path), size: \(size) bytes")
+                        print("[PDF Export] SUCCESS - File created: \(url.path), size: \(size) bytes")
                         NSWorkspace.shared.activateFileViewerSelecting([url])
                     } else {
-                        Swift.print("[PDF Export] ERROR - File was not created at: \(url.path)")
+                        print("[PDF Export] ERROR - File was not created at: \(url.path)")
                         self.showError("PDF file was not created. Please check permissions.")
                     }
                 } catch {
-                    Swift.print("[PDF Export] ERROR: \(error)")
+                    print("[PDF Export] ERROR: \(error)")
                     self.showError("Failed to export PDF: \(error.localizedDescription)")
                 }
             }
@@ -325,23 +325,23 @@ class DocumentExporter {
         
         // Capture self strongly to keep exporter alive until export completes
         savePanel.begin { response in
-            Swift.print("[PNG Export] Save panel response: \(response == .OK ? "OK" : "Cancelled")")
+            print("[PNG Export] Save panel response: \(response == .OK ? "OK" : "Cancelled")")
             if response == .OK, let url = savePanel.url {
-                Swift.print("[PNG Export] Target URL: \(url.path)")
+                print("[PNG Export] Target URL: \(url.path)")
                 do {
                     try self.exportToPNG(to: url)
                     // Verify file was created
                     if FileManager.default.fileExists(atPath: url.path) {
                         let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
                         let size = attrs?[.size] as? Int ?? 0
-                        Swift.print("[PNG Export] SUCCESS - File created: \(url.path), size: \(size) bytes")
+                        print("[PNG Export] SUCCESS - File created: \(url.path), size: \(size) bytes")
                         NSWorkspace.shared.activateFileViewerSelecting([url])
                     } else {
-                        Swift.print("[PNG Export] ERROR - File was not created at: \(url.path)")
+                        print("[PNG Export] ERROR - File was not created at: \(url.path)")
                         self.showError("PNG file was not created. Please check permissions.")
                     }
                 } catch {
-                    Swift.print("[PNG Export] ERROR: \(error)")
+                    print("[PNG Export] ERROR: \(error)")
                     self.showError("Failed to export PNG: \(error.localizedDescription)")
                 }
             }
@@ -392,24 +392,27 @@ class CLIExporter {
         inputPath: String,
         outputPath: String,
         format: OutputFormat,
-        includeLineNumbers: Bool = true,
-        theme: SyntaxTheme = .dark,
-        fontSize: CGFloat = 12
+        includeLineNumbers: Bool? = nil,
+        theme: SyntaxTheme? = nil,
+        fontSize: CGFloat? = nil
     ) throws {
         // Read input file
         let inputURL = URL(fileURLWithPath: inputPath)
         let text = try String(contentsOf: inputURL, encoding: .utf8)
         let fileType = SupportedFileType.from(url: inputURL)
-        
-        // Create exporter
+
+        // Read settings from EditorSettingsManager
+        let settings = EditorSettingsManager.shared
+
+        // Create exporter using user settings (with optional overrides)
         let exporter = DocumentExporter(
             text: text,
             fileType: fileType,
             fileName: inputURL.lastPathComponent,
-            theme: theme,
-            includeLineNumbers: includeLineNumbers,
-            fontSize: fontSize,
-            fontName: "Menlo"
+            theme: theme ?? settings.syntaxTheme(for: .dark),
+            includeLineNumbers: includeLineNumbers ?? settings.showLineNumbers,
+            fontSize: fontSize ?? settings.fontSize,
+            fontName: settings.selectedFont.fontName
         )
         
         // Export
@@ -426,27 +429,30 @@ class CLIExporter {
     /// Print a file (opens print dialog)
     static func printFile(
         inputPath: String,
-        includeLineNumbers: Bool = true,
-        theme: SyntaxTheme = .dark,
-        fontSize: CGFloat = 12
+        includeLineNumbers: Bool? = nil,
+        theme: SyntaxTheme? = nil,
+        fontSize: CGFloat? = nil
     ) throws {
         // Read input file
         let inputURL = URL(fileURLWithPath: inputPath)
         let text = try String(contentsOf: inputURL, encoding: .utf8)
         let fileType = SupportedFileType.from(url: inputURL)
-        
-        // Create exporter and print
+
+        // Read settings from EditorSettingsManager
+        let settings = EditorSettingsManager.shared
+
+        // Create exporter using user settings (with optional overrides)
         let exporter = DocumentExporter(
             text: text,
             fileType: fileType,
             fileName: inputURL.lastPathComponent,
-            theme: theme,
-            includeLineNumbers: includeLineNumbers,
-            fontSize: fontSize,
-            fontName: "Menlo"
+            theme: theme ?? settings.syntaxTheme(for: .dark),
+            includeLineNumbers: includeLineNumbers ?? settings.showLineNumbers,
+            fontSize: fontSize ?? settings.fontSize,
+            fontName: settings.selectedFont.fontName
         )
         
-        exporter.print()
+        exporter.printDocument()
     }
 }
 

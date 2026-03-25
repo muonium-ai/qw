@@ -314,12 +314,24 @@ struct ELFInterpreter: FileFormatInterpreter {
 
 /// Uses `MagicBytes.detect()` to pick the right `FileFormatInterpreter` and
 /// returns decoded `[FieldValue]` for the file's header.
+/// Tries the SQLite format database first, then falls back to hardcoded
+/// interpreters.
 enum FileAnnotator {
 
     /// Annotate known header fields in `data`.
     static func annotate(data: Data) -> [FieldValue] {
         guard let signature = MagicBytes.detect(from: data) else { return [] }
 
+        // Try database-backed fields first
+        let db = FormatDatabase.shared
+        if db.isAvailable, let dbSig = db.detectSignature(from: data) {
+            let dbFields = db.loadFields(signatureId: dbSig.id, data: data)
+            if !dbFields.isEmpty {
+                return dbFields
+            }
+        }
+
+        // Fall back to hardcoded interpreters
         let descriptors: [FieldDescriptor]
         switch signature.name {
         case "PNG Image":

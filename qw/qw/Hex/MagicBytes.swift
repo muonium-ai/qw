@@ -122,14 +122,36 @@ enum MagicBytes {
               description: "Likely JSON document"),
     ]
 
+    // MARK: - Database-backed detection
+
+    /// Try the SQLite format database first.  Returns `nil` if the database
+    /// is unavailable or contains no matching signature.
+    static func detectFromDatabase(data: Data) -> FileSignature? {
+        let db = FormatDatabase.shared
+        guard db.isAvailable else { return nil }
+        guard let dbSig = db.detectSignature(from: data) else { return nil }
+        return FileSignature(
+            name: dbSig.name,
+            description: dbSig.description,
+            matchedRange: dbSig.matchedRange
+        )
+    }
+
     // MARK: - Detection
 
     /// Detect the file type from magic bytes in the first 32 bytes of `data`.
+    /// Tries the SQLite format database first, then falls back to the
+    /// hardcoded registry.
     ///
     /// - Parameter data: The raw file data (at least a few bytes are needed).
     /// - Returns: A `FileSignature` if a known signature matches, otherwise `nil`.
     static func detect(from data: Data) -> FileSignature? {
         guard !data.isEmpty else { return nil }
+
+        // Database-first strategy
+        if let dbResult = detectFromDatabase(data: data) {
+            return dbResult
+        }
 
         let prefixLength = min(data.count, 32)
         let prefix = data.prefix(prefixLength)

@@ -501,10 +501,22 @@ enum ELFLayout: FileLayout {
 // MARK: - File layout detector
 
 /// Detects the file type using `MagicBytes` and returns the structural layout.
+/// Tries the SQLite format database first for static section definitions,
+/// then falls back to the hardcoded format-specific parsers.
 enum FileLayoutDetector {
     static func detect(data: Data) -> [FileSection] {
         guard let sig = MagicBytes.detect(from: data) else { return [] }
 
+        // Try database-backed sections first
+        let db = FormatDatabase.shared
+        if db.isAvailable, let dbSig = db.detectSignature(from: data) {
+            let dbSections = db.loadSections(signatureId: dbSig.id, data: data)
+            if !dbSections.isEmpty {
+                return dbSections
+            }
+        }
+
+        // Fall back to hardcoded parsers
         switch sig.name {
         case "PNG Image":
             return PNGLayout.parse(data: data)

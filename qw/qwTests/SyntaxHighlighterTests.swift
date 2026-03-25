@@ -73,7 +73,6 @@ final class SyntaxHighlighterTests: XCTestCase {
             stringRanges.contains { rangesOverlap(commentRange, $0) }
         }
 
-        XCTExpectFailure("Issue #17: Token ranges overlap (string tokens inside comments)")
         XCTAssertFalse(hasOverlap)
     }
 
@@ -89,7 +88,6 @@ final class SyntaxHighlighterTests: XCTestCase {
             stringRanges.contains { rangesOverlap(commentRange, $0) }
         }
 
-        XCTExpectFailure("Issue #17: Token ranges overlap (string tokens inside comments)")
         XCTAssertFalse(hasOverlap)
     }
 }

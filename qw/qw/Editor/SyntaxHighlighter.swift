@@ -317,7 +317,7 @@ class SyntaxHighlighter {
 
         let totalLength = text.utf16.count
 
-        return pygmentsTokens.compactMap { token in
+        let allTokens: [Token] = pygmentsTokens.compactMap { token in
             let length = token.value.utf16.count
             guard length > 0 else { return nil }
             let end = token.start + length
@@ -325,6 +325,18 @@ class SyntaxHighlighter {
             let nsRange = NSRange(location: token.start, length: length)
             guard let range = Range(nsRange, in: text) else { return nil }
             return Token(range: range, type: mapTokenType(token.type))
+        }
+
+        // Collect comment ranges so we can suppress tokens that overlap them
+        let commentRanges = allTokens.filter { $0.type == .comment }.map { $0.range }
+
+        return allTokens.filter { token in
+            if token.type == .comment { return true }
+            // Drop non-comment tokens whose range overlaps any comment range
+            return !commentRanges.contains { commentRange in
+                token.range.lowerBound < commentRange.upperBound &&
+                commentRange.lowerBound < token.range.upperBound
+            }
         }
     }
 

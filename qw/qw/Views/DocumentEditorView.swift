@@ -10,7 +10,6 @@ import UniformTypeIdentifiers
 
 #if os(macOS)
 import AppKit
-import QuickLookUI
 #endif
 
 /// The main document editor view
@@ -145,9 +144,6 @@ struct DocumentEditorView: View {
             Button("Hex Mode") {
                 isHexMode = true
             }
-            Button("Text Mode") {
-                isHexMode = false
-            }
             #if os(macOS)
             if let url = fileURL {
                 Button("Preview (Quick Look)") {
@@ -158,7 +154,9 @@ struct DocumentEditorView: View {
                 }
             }
             #endif
-            Button("Cancel", role: .cancel) { }
+            Button("Cancel", role: .cancel) {
+                isHexMode = true
+            }
         }
         #if os(macOS)
         .toolbar {
@@ -232,14 +230,13 @@ struct DocumentEditorView: View {
     
     #if os(macOS)
     private func showQuickLookPreview(for url: URL) {
-        let panel = QLPreviewPanel.shared()!
-        let delegate = QuickLookCoordinator(url: url)
-        // Keep a strong reference via objc associated object so it lives while the panel is up
-        objc_setAssociatedObject(panel, "qlCoordinator", delegate, .OBJC_ASSOCIATION_RETAIN)
-        panel.dataSource = delegate
-        panel.delegate = delegate
-        panel.makeKeyAndOrderFront(nil)
-        panel.reloadData()
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/qlmanage")
+        process.arguments = ["-p", url.path]
+        // Suppress qlmanage's stdout/stderr chatter
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try? process.run()
     }
 
     private func openComparePanel() {
@@ -479,26 +476,6 @@ extension View {
         }
     }
 }
-
-#if os(macOS)
-// MARK: - Quick Look Coordinator
-
-/// Serves as both data source and delegate for QLPreviewPanel to display a single file.
-private class QuickLookCoordinator: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDelegate {
-    let url: URL
-
-    init(url: URL) {
-        self.url = url
-        super.init()
-    }
-
-    func numberOfPreviewItems(in panel: QLPreviewPanel!) -> Int { 1 }
-
-    func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> (any QLPreviewItem)! {
-        url as NSURL
-    }
-}
-#endif
 
 #Preview {
     DocumentEditorView(

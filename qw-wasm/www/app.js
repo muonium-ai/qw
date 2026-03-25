@@ -1,12 +1,7 @@
 // QW Hex Viewer — Browser UI
-// Expects WASM module at ../pkg/qw_wasm.js
+// WASM module loaded dynamically — falls back to JS if pkg/ not built
 
-import init, {
-  detect_file_type,
-  format_hex_row,
-  decode_bytes,
-  get_file_info,
-} from '../pkg/qw_wasm.js';
+let wasmInit, detect_file_type, format_hex_row, decode_bytes, get_file_info;
 
 // ─── State ───────────────────────────────────────────────────
 const state = {
@@ -47,7 +42,13 @@ const fileInput      = $('#file-input');
 // ─── Init WASM ───────────────────────────────────────────────
 async function initWasm() {
   try {
-    await init();
+    const wasm = await import('../pkg/qw_wasm.js');
+    wasmInit = wasm.default;
+    detect_file_type = wasm.detect_file_type;
+    format_hex_row = wasm.format_hex_row;
+    decode_bytes = wasm.decode_bytes;
+    get_file_info = wasm.get_file_info;
+    await wasmInit();
     state.wasmReady = true;
     console.log('[QW] WASM module loaded');
   } catch (err) {

@@ -71,35 +71,37 @@ export_file() {
     local theme="${5:-light}"
     
     # Create a temporary copy to avoid any potential file modification issues
-    local temp_input="/tmp/qw_temp_input_$$.txt"
+    local temp_input
+    temp_input="$(mktemp /tmp/qw_temp_input.XXXXXXXXXX)" || { echo "Error: Could not create temp file."; return 1; }
     cp "$input_file" "$temp_input"
     
     if [ "$format" = "pdf" ]; then
         # Try enscript + ps2pdf for syntax-highlighted PDF (if installed)
         if command -v enscript &> /dev/null && command -v ps2pdf &> /dev/null; then
-            local temp_ps="/tmp/qw_temp_$$.ps"
-            local enscript_opts="-1 --color=1"
-            
+            local temp_ps
+            temp_ps="$(mktemp /tmp/qw_temp_ps.XXXXXXXXXX)" || { rm -f "$temp_input"; echo "Error: Could not create temp file."; return 1; }
+            local -a enscript_opts=("-1" "--color=1")
+
             # Detect language for syntax highlighting
             local ext="${input_file##*.}"
             case "$ext" in
-                py) enscript_opts="$enscript_opts -E python" ;;
-                js|ts) enscript_opts="$enscript_opts -E javascript" ;;
-                swift) enscript_opts="$enscript_opts -E c" ;;
-                c|h) enscript_opts="$enscript_opts -E c" ;;
-                cpp|cc|cxx) enscript_opts="$enscript_opts -E cpp" ;;
-                java) enscript_opts="$enscript_opts -E java" ;;
-                sh|bash|zsh) enscript_opts="$enscript_opts -E bash" ;;
-                html|htm) enscript_opts="$enscript_opts -E html" ;;
-                css) enscript_opts="$enscript_opts -E css" ;;
+                py) enscript_opts+=("-E" "python") ;;
+                js|ts) enscript_opts+=("-E" "javascript") ;;
+                swift) enscript_opts+=("-E" "c") ;;
+                c|h) enscript_opts+=("-E" "c") ;;
+                cpp|cc|cxx) enscript_opts+=("-E" "cpp") ;;
+                java) enscript_opts+=("-E" "java") ;;
+                sh|bash|zsh) enscript_opts+=("-E" "bash") ;;
+                html|htm) enscript_opts+=("-E" "html") ;;
+                css) enscript_opts+=("-E" "css") ;;
                 *) ;; # No specific highlighting
             esac
-            
+
             if [ "$line_numbers" = "true" ]; then
-                enscript_opts="$enscript_opts -C"
+                enscript_opts+=("-C")
             fi
-            
-            enscript $enscript_opts -o "$temp_ps" "$temp_input" 2>/dev/null
+
+            enscript "${enscript_opts[@]}" -o "$temp_ps" "$temp_input" 2>/dev/null
             if [ $? -eq 0 ] && [ -s "$temp_ps" ]; then
                 ps2pdf "$temp_ps" "$output_file" 2>/dev/null
                 rm -f "$temp_ps" "$temp_input"
@@ -153,7 +155,8 @@ export_file() {
         fi
         
         # Fallback: Create PDF first, then convert to PNG using sips
-        local temp_pdf="/tmp/qw_temp_$$.pdf"
+        local temp_pdf
+        temp_pdf="$(mktemp /tmp/qw_temp_pdf.XXXXXXXXXX)" || { rm -f "$temp_input"; echo "Error: Could not create temp file."; return 1; }
         
         # Use cupsfilter for basic PDF
         cupsfilter -m "application/pdf" -o media=Letter "$temp_input" > "$temp_pdf" 2>/dev/null
@@ -186,11 +189,11 @@ print_file() {
     
     # Use lpr for printing
     if command -v enscript &> /dev/null; then
-        local enscript_opts="-1 -E --color=1"
+        local -a enscript_opts=("-1" "-E" "--color=1")
         if [ "$line_numbers" = "true" ]; then
-            enscript_opts="$enscript_opts -N"
+            enscript_opts+=("-N")
         fi
-        enscript $enscript_opts "$input_file" | lpr
+        enscript "${enscript_opts[@]}" "$input_file" | lpr
         echo "Sent to printer: $input_file"
     else
         # Fallback to lpr directly
@@ -322,7 +325,7 @@ if [ ${#FILES[@]} -gt 0 ]; then
     # Set read-only flag via user defaults if requested
     if [ "$READ_ONLY" = "1" ]; then
         # Write the files to open in read-only mode to a temp file
-        READONLY_FILES_LIST="/tmp/qw_readonly_files_$$"
+        READONLY_FILES_LIST="$(mktemp /tmp/qw_readonly_files.XXXXXXXXXX)" || { echo "Error: Could not create temp file."; exit 1; }
         printf "%s\n" "${FILES[@]}" > "$READONLY_FILES_LIST"
         defaults write "$BUNDLE_ID" pendingReadOnlyFiles -string "$READONLY_FILES_LIST"
     fi

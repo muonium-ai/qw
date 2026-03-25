@@ -130,76 +130,58 @@ class DocumentExporter {
             return full
         }
         
-        for (index, line) in lines.enumerated() {
-            // Add line number if enabled
-            if includeLineNumbers {
-                let lineNumber = String(format: "%\(maxLineDigits)d  ", index + 1)
-                let lineNumberAttrs: [NSAttributedString.Key: Any] = [
-                    .font: font,
-                    .foregroundColor: lineNumberColor,
-                    .paragraphStyle: paragraphStyle.copy()
-                ]
-                result.append(NSAttributedString(string: lineNumber, attributes: lineNumberAttrs))
-            }
-            
-            // Apply syntax highlighting to the line
-            let tokens = highlighter.tokenize(line)
-            
-            if tokens.isEmpty {
-                // No tokens, use plain text
-                let attrs: [NSAttributedString.Key: Any] = [
-                    .font: font,
-                    .foregroundColor: plainColor,
-                    .paragraphStyle: paragraphStyle.copy()
-                ]
-                result.append(NSAttributedString(string: line, attributes: attrs))
-            } else {
-                // Apply tokens
-                var lastEnd = line.startIndex
-                
-                for token in tokens {
-                    // Add any gap before token
-                    if token.range.lowerBound > lastEnd {
-                        let gap = String(line[lastEnd..<token.range.lowerBound])
-                        let attrs: [NSAttributedString.Key: Any] = [
-                            .font: font,
-                            .foregroundColor: plainColor,
-                            .paragraphStyle: paragraphStyle.copy()
-                        ]
-                        result.append(NSAttributedString(string: gap, attributes: attrs))
-                    }
-                    
-                    // Add token
-                    let tokenText = String(line[token.range])
-                    let tokenColor = nsColor(from: theme.color(for: token.type))
-                    let attrs: [NSAttributedString.Key: Any] = [
-                        .font: font,
-                        .foregroundColor: tokenColor,
-                        .paragraphStyle: paragraphStyle.copy()
-                    ]
-                    result.append(NSAttributedString(string: tokenText, attributes: attrs))
-                    
-                    lastEnd = token.range.upperBound
-                }
-                
-                // Add any remaining text after last token
-                if lastEnd < line.endIndex {
-                    let remainder = String(line[lastEnd...])
-                    let attrs: [NSAttributedString.Key: Any] = [
-                        .font: font,
-                        .foregroundColor: plainColor,
-                        .paragraphStyle: paragraphStyle.copy()
-                    ]
-                    result.append(NSAttributedString(string: remainder, attributes: attrs))
-                }
-            }
-            
-            // Add newline (except for last line)
-            if index < lines.count - 1 {
-                result.append(NSAttributedString(string: "\n"))
+        // Tokenize the full text (preserves multi-line tokens like comments, strings, heredocs)
+        let full = NSMutableAttributedString(string: text)
+        full.addAttributes([
+            .font: font,
+            .foregroundColor: plainColor,
+            .paragraphStyle: paragraphStyle
+        ], range: NSRange(location: 0, length: (text as NSString).length))
+
+        let tokens = highlighter.tokenize(text)
+        for token in tokens {
+            let nsRange = NSRange(token.range, in: text)
+            if nsRange.location != NSNotFound && nsRange.location + nsRange.length <= (text as NSString).length {
+                full.addAttributes([
+                    .foregroundColor: nsColor(from: theme.color(for: token.type))
+                ], range: nsRange)
             }
         }
-        
+
+        // Split the fully-tokenized attributed string into lines and prepend line numbers
+        let fullString = full.string as NSString
+        var lineStart = 0
+        var lineIndex = 0
+
+        while lineStart <= fullString.length {
+            // Find the end of this line
+            let remaining = NSRange(location: lineStart, length: fullString.length - lineStart)
+            let newlineRange = fullString.range(of: "\n", range: remaining)
+            let lineEnd = newlineRange.location != NSNotFound ? newlineRange.location : fullString.length
+
+            // Build line number prefix
+            let lineNumber = String(format: "%\(maxLineDigits)d  ", lineIndex + 1)
+            let lineNumberAttrs: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: lineNumberColor,
+                .paragraphStyle: paragraphStyle.copy()
+            ]
+            result.append(NSAttributedString(string: lineNumber, attributes: lineNumberAttrs))
+
+            // Append the highlighted line content
+            let lineRange = NSRange(location: lineStart, length: lineEnd - lineStart)
+            result.append(full.attributedSubstring(from: lineRange))
+
+            // Append newline unless this is the last line
+            if newlineRange.location != NSNotFound {
+                result.append(NSAttributedString(string: "\n"))
+                lineStart = lineEnd + 1
+            } else {
+                break
+            }
+            lineIndex += 1
+        }
+
         return result
     }
     

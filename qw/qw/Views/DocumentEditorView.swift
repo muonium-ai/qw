@@ -169,6 +169,7 @@ struct DocumentEditorView: View {
         .focusedSceneValue(\.toggleHexModeAction, { isHexMode.toggle() })
         .focusedSceneValue(\.isHexMode, isHexMode)
         .focusedSceneValue(\.hexCompareAction, { openComparePanel() })
+        .optionalFocusedSceneValue(\.currentFileURL, fileURL)
         #endif
     }
 
@@ -380,6 +381,10 @@ struct HexCompareActionFocusKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
+struct CurrentFileURLFocusKey: FocusedValueKey {
+    typealias Value = URL
+}
+
 extension FocusedValues {
     var searchState: SearchState? {
         get { self[SearchStateFocusKey.self] }
@@ -429,6 +434,24 @@ extension FocusedValues {
     var hexCompareAction: (() -> Void)? {
         get { self[HexCompareActionFocusKey.self] }
         set { self[HexCompareActionFocusKey.self] = newValue }
+    }
+
+    var currentFileURL: URL? {
+        get { self[CurrentFileURLFocusKey.self] }
+        set { self[CurrentFileURLFocusKey.self] = newValue }
+    }
+}
+
+// MARK: - Optional Focused Scene Value Helper
+extension View {
+    /// Conditionally sets a focused scene value only when the optional value is non-nil.
+    @ViewBuilder
+    func optionalFocusedSceneValue<T>(_ keyPath: WritableKeyPath<FocusedValues, T?>, _ value: T?) -> some View {
+        if let value = value {
+            self.focusedSceneValue(keyPath, value)
+        } else {
+            self
+        }
     }
 }
 

@@ -94,7 +94,8 @@ struct qwApp: App {
     @FocusedValue(\.toggleHexModeAction) private var toggleHexModeAction
     @FocusedValue(\.isHexMode) private var isHexMode
     @FocusedValue(\.hexCompareAction) private var hexCompareAction
-    
+    @FocusedValue(\.currentFileURL) private var currentFileURL
+
     #if os(macOS)
     @NSApplicationDelegateAdaptor(QWAppDelegate.self) var appDelegate
     #endif
@@ -121,6 +122,16 @@ struct qwApp: App {
                 .keyboardShortcut("o", modifiers: [.command, .shift])
             }
             
+            // File menu - Close, Revert, Duplicate
+            CommandGroup(before: .saveItem) {
+                Button("Close") {
+                    NSApp.sendAction(#selector(NSWindow.performClose(_:)), to: nil, from: nil)
+                }
+                .keyboardShortcut("w", modifiers: .command)
+
+                Divider()
+            }
+
             // File menu - Save (disable when read-only)
             CommandGroup(replacing: .saveItem) {
                 Button("Save") {
@@ -164,6 +175,20 @@ struct qwApp: App {
                         NSSound.beep()
                     }
                 }
+
+                Divider()
+
+                Button("Revert to Saved") {
+                    NSApp.sendAction(#selector(NSDocument.revertToSaved(_:)), to: nil, from: nil)
+                }
+
+                Divider()
+
+                Button("Duplicate Window") {
+                    duplicateWindow()
+                }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
+                .disabled(currentFileURL == nil)
             }
             
             // File menu - Print
@@ -293,6 +318,15 @@ struct qwApp: App {
                         }
                     }
                 }
+            }
+        }
+    }
+    /// Open a new window with the same file loaded
+    private func duplicateWindow() {
+        guard let url = currentFileURL else { return }
+        NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { _, _, error in
+            if let error = error {
+                print("Error duplicating window: \(error)")
             }
         }
     }

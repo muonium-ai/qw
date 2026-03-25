@@ -348,20 +348,38 @@ struct HexView: View {
     }
 
     private var hexContent: some View {
-        ScrollView(.vertical) {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(0..<rowCount, id: \.self) { index in
-                    let r = row(at: index)
-                    hexRowView(r)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(index.isMultiple(of: 2) ? Color.clear : alternateRowBackground)
+        ScrollViewReader { proxy in
+            ScrollView(.vertical) {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<rowCount, id: \.self) { index in
+                        let r = row(at: index)
+                        hexRowView(r)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(index.isMultiple(of: 2) ? Color.clear : alternateRowBackground)
+                            .id(index)
+                    }
                 }
             }
+            .onChange(of: hexSearchState.currentMatchIndex) { _, newIndex in
+                guard !hexSearchState.matches.isEmpty, newIndex < hexSearchState.matches.count else { return }
+                let matchStart = hexSearchState.matches[newIndex].lowerBound
+                let targetRow = matchStart / 16
+                withAnimation {
+                    proxy.scrollTo(targetRow, anchor: .center)
+                }
+            }
+            .onChange(of: selectionStart) { _, newValue in
+                guard let offset = newValue else { return }
+                let targetRow = offset / 16
+                withAnimation {
+                    proxy.scrollTo(targetRow, anchor: .center)
+                }
+            }
+            .contextMenu { copyContextMenu }
+            .background(keyboardHandler)
         }
-        .contextMenu { copyContextMenu }
-        .background(keyboardHandler)
     }
 
     /// Detected file type from magic bytes, if any.

@@ -4,7 +4,7 @@
 //
 //  Hex viewer and editor displaying file contents in canonical hex dump format.
 //  Supports byte selection, copy/export in multiple formats, and inline editing.
-//  Ticket: T-000019, T-000020, T-000023, T-000024
+//  Ticket: T-000019, T-000020, T-000023, T-000024, T-000025
 //
 
 import SwiftUI
@@ -72,6 +72,11 @@ struct HexView: View {
     // MARK: - Hex search state
 
     @StateObject private var hexSearchState = HexSearchState()
+
+    // MARK: - Data inspector state
+
+    @State private var showDataInspector: Bool = true
+    @State private var isLittleEndian: Bool = true
 
     /// The normalized (ordered) range of selected byte indices, if any.
     private var selectionRange: ClosedRange<Int>? {
@@ -183,12 +188,24 @@ struct HexView: View {
                     selectionEnd = offset
                 }
             }
-            if displayData.isEmpty {
-                emptyView
-            } else {
-                hexContent
+            HStack(spacing: 0) {
+                VStack(spacing: 0) {
+                    if displayData.isEmpty {
+                        emptyView
+                    } else {
+                        hexContent
+                    }
+                    statusBar
+                }
+                if showDataInspector && selectionStart != nil {
+                    Divider()
+                    DataInspectorView(
+                        data: displayData,
+                        cursorOffset: selectionStart,
+                        isLittleEndian: $isLittleEndian
+                    )
+                }
             }
-            statusBar
         }
         #if os(macOS)
         .onCopyCommand {
@@ -213,6 +230,13 @@ struct HexView: View {
                     Image(systemName: "arrow.right.to.line")
                 }
                 .help("Go to offset")
+
+                Button {
+                    showDataInspector.toggle()
+                } label: {
+                    Image(systemName: "info.circle")
+                }
+                .help("Toggle Data Inspector")
             }
         }
         .onAppear {
@@ -265,8 +289,20 @@ struct HexView: View {
         .background(keyboardHandler)
     }
 
+    /// Detected file type from magic bytes, if any.
+    private var detectedFileType: FileSignature? {
+        MagicBytes.detect(from: displayData)
+    }
+
     private var statusBar: some View {
         HStack {
+            if let fileType = detectedFileType {
+                Text(fileType.name)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                Text(" · ")
+                    .foregroundStyle(.secondary)
+            }
             Text(fileSizeDescription)
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(.secondary)

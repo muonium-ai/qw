@@ -4,7 +4,7 @@
 //
 //  Hex viewer and editor displaying file contents in canonical hex dump format.
 //  Supports byte selection, copy/export in multiple formats, and inline editing.
-//  Ticket: T-000019, T-000020, T-000023, T-000024, T-000025
+//  Ticket: T-000019, T-000020, T-000023, T-000024, T-000025, T-000026
 //
 
 import SwiftUI
@@ -73,10 +73,24 @@ struct HexView: View {
 
     @StateObject private var hexSearchState = HexSearchState()
 
+    // MARK: - File layout sections (cached)
+
+    /// Cached file sections detected from the binary layout.
+    /// Uses a class wrapper so the computation is performed once per data identity,
+    /// not on every view redraw.
+    @State private var cachedSections: [FileSection] = []
+    @State private var cachedSectionsDataCount: Int = -1
+
     // MARK: - Data inspector state
 
     @State private var showDataInspector: Bool = true
     @State private var isLittleEndian: Bool = true
+
+    // MARK: - Annotation state
+
+    @State private var showAnnotationPanel: Bool = false
+    @State private var cachedAnnotations: [FieldValue] = []
+    @State private var cachedAnnotationsDataCount: Int = -1
 
     /// The normalized (ordered) range of selected byte indices, if any.
     private var selectionRange: ClosedRange<Int>? {
@@ -168,6 +182,47 @@ struct HexView: View {
         return "Selection: \(String(format: "0x%X", range.lowerBound))\u{2013}\(String(format: "0x%X", range.upperBound)) (\(label))"
     }
 
+    /// Recompute field annotations if data has changed.
+    private func updateAnnotationsIfNeeded() {
+        let count = displayData.count
+        if count != cachedAnnotationsDataCount {
+            cachedAnnotationsDataCount = count
+            cachedAnnotations = FileAnnotator.annotate(data: displayData)
+        }
+    }
+
+    /// Tooltip for a byte from field annotations, if any.
+    private func annotationTooltip(for index: Int) -> String? {
+        FileAnnotator.tooltip(for: index, in: cachedAnnotations)
+    }
+
+    /// Recompute file sections if data has changed.
+    private func updateSectionsIfNeeded() {
+        let count = displayData.count
+        if count != cachedSectionsDataCount {
+            cachedSectionsDataCount = count
+            cachedSections = FileLayoutDetector.detect(data: displayData)
+        }
+    }
+
+    /// Find the section that contains the given byte index, if any.
+    private func sectionForByte(at index: Int) -> FileSection? {
+        cachedSections.first { $0.range.contains(index) }
+    }
+
+    /// Background color for a byte based on its file section, or `.clear`.
+    private func sectionBackground(for index: Int) -> Color {
+        guard let section = sectionForByte(at: index) else { return .clear }
+        let color = section.kind.color
+        return color == .clear ? .clear : color.opacity(0.15)
+    }
+
+    /// Tooltip text for a byte based on its file section, or nil.
+    private func sectionTooltip(for index: Int) -> String? {
+        guard let section = sectionForByte(at: index) else { return nil }
+        return "\(section.name): \(section.description)"
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -196,6 +251,9 @@ struct HexView: View {
                         hexContent
                     }
                     statusBar
+                    if !cachedSections.isEmpty {
+                        sectionLegendView
+                    }
                 }
                 if showDataInspector && selectionStart != nil {
                     Divider()
@@ -204,6 +262,10 @@ struct HexView: View {
                         cursorOffset: selectionStart,
                         isLittleEndian: $isLittleEndian
                     )
+                }
+                if showAnnotationPanel {
+                    Divider()
+                    AnnotationPanelView(annotations: cachedAnnotations)
                 }
             }
         }
@@ -237,17 +299,30 @@ struct HexView: View {
                     Image(systemName: "info.circle")
                 }
                 .help("Toggle Data Inspector")
+
+                Button {
+                    showAnnotationPanel.toggle()
+                } label: {
+                    Image(systemName: "doc.text.magnifyingglass")
+                }
+                .help("Toggle Format Annotations")
             }
         }
         .onAppear {
             if isEditable {
                 hexDocumentStorage.undoManager = environmentUndoManager
             }
+            updateSectionsIfNeeded()
+            updateAnnotationsIfNeeded()
         }
         .onChange(of: environmentUndoManager) { _, newValue in
             if isEditable {
                 hexDocumentStorage.undoManager = newValue
             }
+        }
+        .onChange(of: displayData.count) { _, _ in
+            updateSectionsIfNeeded()
+            updateAnnotationsIfNeeded()
         }
     }
 
@@ -351,6 +426,49 @@ struct HexView: View {
         }
     }
 
+    // MARK: - Section legend
+
+    /// Compact legend showing detected section names and their colors.
+    private var sectionLegendView: some View {
+        HStack(spacing: 12) {
+            // Deduplicate by SectionKind — show each kind only once
+            let uniqueKinds: [(SectionKind, String)] = {
+                var seen = Set<String>()
+                var result: [(SectionKind, String)] = []
+                for section in cachedSections {
+                    let key = section.kind.label
+                    if !seen.contains(key) && section.kind != .data {
+                        seen.insert(key)
+                        result.append((section.kind, section.name))
+                    }
+                }
+                return result
+            }()
+
+            ForEach(uniqueKinds.indices, id: \.self) { i in
+                let (kind, _) = uniqueKinds[i]
+                HStack(spacing: 4) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(kind.color.opacity(0.4))
+                        .frame(width: 10, height: 10)
+                    Text(kind.label)
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+        .background {
+            #if os(macOS)
+            Color(nsColor: .windowBackgroundColor)
+            #else
+            Color(uiColor: .secondarySystemBackground)
+            #endif
+        }
+    }
+
     // MARK: - Context menu
 
     @ViewBuilder
@@ -442,11 +560,23 @@ struct HexView: View {
         let isCursor = isEditable && isCursorByte(absoluteIndex) && !asciiInputMode
         let isInSelection = isSelected(absoluteIndex) && !isCursor
         let matchHighlight = searchMatchHighlight(for: absoluteIndex)
+        let sectionBg = sectionBackground(for: absoluteIndex)
+        let fgHighlight: Color = isCursor ? Color.accentColor.opacity(0.8)
+            : (isInSelection ? selectionHighlight
+            : (matchHighlight != Color.clear ? matchHighlight : .clear))
+
+        let tooltip = annotationTooltip(for: absoluteIndex) ?? sectionTooltip(for: absoluteIndex)
 
         return Text(String(format: "%02x ", byte))
             .foregroundStyle(isCursor ? Color.white : byteColor(byte))
-            .background(isCursor ? Color.accentColor.opacity(0.8) : (isInSelection ? selectionHighlight : matchHighlight))
+            .background(
+                ZStack {
+                    sectionBg
+                    fgHighlight
+                }
+            )
             .contentShape(Rectangle())
+            .help(tooltip ?? "")
             .onTapGesture {
                 handleByteTap(absoluteIndex, extend: false, ascii: false)
             }
@@ -466,11 +596,23 @@ struct HexView: View {
         let isCursor = isEditable && isCursorByte(absoluteIndex) && asciiInputMode
         let isInSelection = isSelected(absoluteIndex) && !isCursor
         let matchHighlight = searchMatchHighlight(for: absoluteIndex)
+        let sectionBg = sectionBackground(for: absoluteIndex)
+        let fgHighlight: Color = isCursor ? Color.accentColor.opacity(0.8)
+            : (isInSelection ? selectionHighlight
+            : (matchHighlight != Color.clear ? matchHighlight : .clear))
+
+        let tooltip = annotationTooltip(for: absoluteIndex) ?? sectionTooltip(for: absoluteIndex)
 
         return Text(asciiCharacter(byte))
             .foregroundStyle(isCursor ? Color.white : byteColor(byte))
-            .background(isCursor ? Color.accentColor.opacity(0.8) : (isInSelection ? selectionHighlight : matchHighlight))
+            .background(
+                ZStack {
+                    sectionBg
+                    fgHighlight
+                }
+            )
             .contentShape(Rectangle())
+            .help(tooltip ?? "")
             .onTapGesture {
                 handleByteTap(absoluteIndex, extend: false, ascii: true)
             }

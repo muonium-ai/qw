@@ -3,16 +3,17 @@
 //  qw
 //
 //  Read-only hex viewer that displays file contents in canonical hex dump format.
-//  Ticket: T-000019
+//  Ticket: T-000019, T-000023
 //
 
 import SwiftUI
 
 /// A row of hex dump output: offset, 16 bytes of hex, and ASCII representation.
+/// Computed lazily from a Data slice — no intermediate [UInt8] array needed.
 private struct HexRow: Identifiable {
-    let id: Int // row index
+    let id: Int // row index (stable ID for LazyVStack)
     let offset: Int
-    let bytes: [UInt8]
+    let bytes: Data.SubSequence
 }
 
 /// Read-only hex viewer displaying Data in canonical hex dump format.
@@ -25,19 +26,44 @@ private struct HexRow: Identifiable {
 /// - Null bytes are dimmed, high bytes (>127) use the accent color, printable ASCII uses the default color.
 /// - Alternating row backgrounds for readability.
 /// - Status bar showing total file size.
+///
+/// **Virtual scrolling**: rows are computed lazily via `LazyVStack` and `ForEach`
+/// over an index range. Only the bytes for visible rows are accessed, keeping
+/// memory usage constant regardless of file size.
+///
+/// **Memory-mapped I/O**: use `HexView(url:)` to open large files with
+/// `Data(contentsOf:options:.mappedIfSafe)` so the OS pages in only the
+/// portions that are actually read.
 struct HexView: View {
     let data: Data
 
+    // MARK: - Memory-mapped convenience initializer
+
+    /// Opens a file with memory-mapped I/O (`mappedIfSafe`), suitable for
+    /// files up to hundreds of megabytes without loading everything into RAM.
+    /// Falls back to empty data if the file cannot be read.
+    init(url: URL) {
+        self.data = (try? Data(contentsOf: url, options: .mappedIfSafe)) ?? Data()
+    }
+
+    /// Standard initializer for in-memory data (small files, buffers, etc.).
+    init(data: Data) {
+        self.data = data
+    }
+
     // MARK: - Computed
 
-    private var rows: [HexRow] {
-        let bytes = [UInt8](data)
-        let totalRows = max((bytes.count + 15) / 16, 0)
-        return (0..<totalRows).map { index in
-            let start = index * 16
-            let end = min(start + 16, bytes.count)
-            return HexRow(id: index, offset: start, bytes: Array(bytes[start..<end]))
-        }
+    /// Total number of 16-byte rows needed to display `data`.
+    private var rowCount: Int {
+        max((data.count + 15) / 16, 0)
+    }
+
+    /// Build a single `HexRow` on demand from the backing data.
+    /// Only the 16-byte slice for this row is touched.
+    private func row(at index: Int) -> HexRow {
+        let start = data.startIndex + index * 16
+        let end = min(start + 16, data.endIndex)
+        return HexRow(id: index, offset: index * 16, bytes: data[start..<end])
     }
 
     private var fileSizeDescription: String {
@@ -84,12 +110,13 @@ struct HexView: View {
     private var hexContent: some View {
         ScrollView(.vertical) {
             LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(rows) { row in
-                    hexRowView(row)
+                ForEach(0..<rowCount, id: \.self) { index in
+                    let r = row(at: index)
+                    hexRowView(r)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 2)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(row.id.isMultiple(of: 2) ? Color.clear : alternateRowBackground)
+                        .background(index.isMultiple(of: 2) ? Color.clear : alternateRowBackground)
                 }
             }
         }
@@ -126,8 +153,9 @@ struct HexView: View {
             // Hex bytes — first 8
             ForEach(0..<8, id: \.self) { i in
                 if i < row.bytes.count {
-                    Text(String(format: "%02x ", row.bytes[i]))
-                        .foregroundStyle(byteColor(row.bytes[i]))
+                    let byte = row.bytes[row.bytes.startIndex + i]
+                    Text(String(format: "%02x ", byte))
+                        .foregroundStyle(byteColor(byte))
                 } else {
                     Text("   ")
                 }
@@ -139,8 +167,9 @@ struct HexView: View {
             // Hex bytes — second 8
             ForEach(8..<16, id: \.self) { i in
                 if i < row.bytes.count {
-                    Text(String(format: "%02x ", row.bytes[i]))
-                        .foregroundStyle(byteColor(row.bytes[i]))
+                    let byte = row.bytes[row.bytes.startIndex + i]
+                    Text(String(format: "%02x ", byte))
+                        .foregroundStyle(byteColor(byte))
                 } else {
                     Text("   ")
                 }
@@ -152,8 +181,9 @@ struct HexView: View {
             Text("|")
                 .foregroundStyle(.secondary)
             ForEach(0..<row.bytes.count, id: \.self) { i in
-                Text(asciiCharacter(row.bytes[i]))
-                    .foregroundStyle(byteColor(row.bytes[i]))
+                let byte = row.bytes[row.bytes.startIndex + i]
+                Text(asciiCharacter(byte))
+                    .foregroundStyle(byteColor(byte))
             }
             Text("|")
                 .foregroundStyle(.secondary)

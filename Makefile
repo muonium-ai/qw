@@ -15,6 +15,9 @@ DERIVED_DATA_MAC := $(BUILD_DIR)/DerivedData-mac
 DERIVED_DATA_IOS := $(BUILD_DIR)/DerivedData-ios
 DERIVED_DATA_IPAD := $(BUILD_DIR)/DerivedData-ipad
 
+# CLI export tool
+QW_EXPORT_DIR := qw-export
+
 # Deployment targets
 MACOS_DEPLOYMENT_TARGET := 15.0
 IOS_DEPLOYMENT_TARGET := 18.0
@@ -59,6 +62,7 @@ RED := \033[0;31m
 NC := \033[0m # No Color
 
 .PHONY: all clean build build-mac build-ios build-ipad build-all \
+	build-cli run-cli \
 	deploy deploy-mac deploy-ios deploy-ipad \
 	test run run-ios run-ipad icons help check-tools install install-cli uninstall
 
@@ -84,12 +88,16 @@ help:
 	@echo "  make deploy-ipad  - Build and deploy to iPad Simulator"
 	@echo "  make deploy       - Deploy to all platforms"
 	@echo ""
-	@echo "$(YELLOW)Other Targets:$(NC)"
-	@echo "  make clean        - Clean all build artifacts"
-	@echo "  make test         - Run unit tests"
-	@echo "  make run          - Build and run on macOS"
+	@echo "$(YELLOW)Run Targets:$(NC)"
+	@echo "  make run          - Build and run GUI app on macOS"
+	@echo "  make run-cli      - Build and run CLI export tool (shows help)"
 	@echo "  make run-ios      - Run on iPad Simulator (alias for run-ipad)"
 	@echo "  make run-ipad     - Build and run on iPad Simulator"
+	@echo ""
+	@echo "$(YELLOW)Other Targets:$(NC)"
+	@echo "  make build-cli    - Build the qw-export CLI tool"
+	@echo "  make clean        - Clean all build artifacts"
+	@echo "  make test         - Run unit tests"
 	@echo "  make icons        - Generate app icons from qw_logo.png"
 	@echo "  make check-tools  - Verify required tools are installed"
 	@echo ""
@@ -98,11 +106,16 @@ help:
 	@echo "  make install-cli  - Install only the 'qw' command line tool"
 	@echo "  make uninstall    - Remove app and CLI tool"
 	@echo ""
-	@echo "$(YELLOW)CLI Usage:$(NC)"
-	@echo "  qw                - Open QW Editor"
-	@echo "  qw file.txt       - Open a file"
-	@echo "  qw .              - Open current folder"
-	@echo "  qw -h             - Show CLI help"
+	@echo "$(YELLOW)CLI Usage (after make install):$(NC)"
+	@echo "  qw                      - Open QW Editor GUI"
+	@echo "  qw file.txt             - Open a file in GUI"
+	@echo "  qw --pdf file.py        - Export file to PDF"
+	@echo "  qw --png file.py        - Export file to PNG"
+	@echo "  qw -h                   - Show CLI help"
+	@echo ""
+	@echo "$(YELLOW)CLI Export Tool (standalone):$(NC)"
+	@echo "  make run-cli            - Show qw-export help"
+	@echo "  .build/release/qw-export --pdf file.py  - Export to PDF"
 	@echo ""
 
 #------------------------------------------------------------------------------
@@ -115,13 +128,27 @@ check-tools:
 	@echo "$(GREEN)All tools available$(NC)"
 
 #------------------------------------------------------------------------------
+# Build CLI Export Tool (Swift Package)
+#------------------------------------------------------------------------------
+build-cli:
+	@echo "$(YELLOW)Building qw-export CLI tool...$(NC)"
+	@cd $(QW_EXPORT_DIR) && swift build -c release 2>&1 | tail -5
+	@echo "$(GREEN)CLI build complete: $(QW_EXPORT_DIR)/.build/release/qw-export$(NC)"
+
+#------------------------------------------------------------------------------
+# Run CLI Export Tool
+#------------------------------------------------------------------------------
+run-cli: build-cli
+	@cd $(QW_EXPORT_DIR) && .build/release/qw-export --help
+
+#------------------------------------------------------------------------------
 # Clean
 #------------------------------------------------------------------------------
 clean:
 	@echo "$(YELLOW)Cleaning build artifacts...$(NC)"
 	@rm -rf $(BUILD_DIR)
 	@rm -rf ~/Library/Developer/Xcode/DerivedData/$(PROJECT_NAME)-*
-	@rm -rf qw-export/.build
+	@rm -rf $(QW_EXPORT_DIR)/.build
 	@xcodebuild clean \
 		-project $(XCODEPROJ) \
 		-scheme $(SCHEME) \

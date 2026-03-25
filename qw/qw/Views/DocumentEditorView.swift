@@ -61,7 +61,8 @@ struct DocumentEditorView: View {
                 text: $document.text,
                 fileType: fileType,
                 fileName: fileURL?.lastPathComponent,
-                isReadOnly: isReadOnly
+                isReadOnly: isReadOnly,
+                searchState: searchState
             )
             .accessibilityIdentifier("documentEditor")
             #if os(macOS)

@@ -13,8 +13,10 @@ struct CodeEditorView: View {
     let fileType: SupportedFileType
     let fileName: String?
     var isReadOnly: Bool = false
+    var searchState: SearchState?
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject private var settings = EditorSettingsManager.shared
+
     
     @State private var lineCount: Int = 1
     @State private var scrollOffset: CGFloat = 0
@@ -83,6 +85,10 @@ struct CodeEditorView: View {
                 fontName: settings.selectedFont.fontName,
                 wordWrap: settings.wordWrap,
                 isReadOnly: isReadOnly,
+                searchState: searchState,
+                searchMatchCount: searchState?.matches.count ?? 0,
+                searchCurrentIndex: searchState?.currentMatchIndex ?? 0,
+                searchText: searchState?.searchText ?? "",
                 onLineCountChange: { count in
                     lineCount = count
                 },
@@ -111,6 +117,7 @@ struct CodeEditorView: View {
                 lineHeightMultiple: settings.lineHeight,
                 fontName: settings.selectedFont.fontName,
                 isReadOnly: isReadOnly,
+                searchState: searchState,
                 onLineCountChange: { count in
                     // UIViewRepresentable.updateUIView can be invoked during SwiftUI's
                     // view update cycle; defer state writes to avoid runtime warnings.
@@ -305,6 +312,11 @@ struct MacOSTextEditor: NSViewRepresentable {
     let fontName: String
     let wordWrap: Bool
     var isReadOnly: Bool = false
+    var searchState: SearchState?
+    /// Value-type copies of search state so SwiftUI can detect changes and call updateNSView.
+    var searchMatchCount: Int = 0
+    var searchCurrentIndex: Int = 0
+    var searchText: String = ""
     let onLineCountChange: (Int) -> Void
     let onScrollChange: (CGFloat, CGFloat, CGFloat) -> Void  // offset, height, lineHeight
     let onCursorChange: (Int, Int) -> Void  // line, column
@@ -402,7 +414,10 @@ struct MacOSTextEditor: NSViewRepresentable {
         
         // Apply syntax highlighting
         context.coordinator.applySyntaxHighlighting(to: textView)
-        
+
+        // Apply initial search highlights if any
+        context.coordinator.applySearchHighlights(to: textView, searchState: searchState)
+
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
         scrollView.backgroundColor = NSColor(theme.background)
@@ -510,6 +525,9 @@ struct MacOSTextEditor: NSViewRepresentable {
         // Always report line count when view updates (handles file load)
         let lineCount = textView.string.components(separatedBy: "\n").count
         onLineCountChange(lineCount)
+
+        // Apply search match highlights
+        context.coordinator.applySearchHighlights(to: textView, searchState: searchState)
     }
     
     func makeCoordinator() -> Coordinator {
@@ -529,6 +547,10 @@ struct MacOSTextEditor: NSViewRepresentable {
         private var isUpdating = false
         private var lastReadOnlyAlertTime: Date = .distantPast
         var cachedHighlighter: SyntaxHighlighter?
+        /// Tracks the last set of highlighted search match ranges to avoid redundant updates.
+        private var lastHighlightedMatchCount: Int = 0
+        private var lastHighlightedMatchIndex: Int = -1
+        private var lastHighlightedSearchText: String = ""
 
         init(_ parent: MacOSTextEditor) {
             self.parent = parent
@@ -705,6 +727,69 @@ struct MacOSTextEditor: NSViewRepresentable {
             // Restore selection
             textView.selectedRanges = selectedRanges
         }
+
+        /// Applies search match highlights using temporary attributes on the layout manager.
+        /// All matches get a yellow background; the current match gets an orange background
+        /// and the text view scrolls to make it visible.
+        func applySearchHighlights(to textView: NSTextView, searchState: SearchState?) {
+            guard let layoutManager = textView.layoutManager else { return }
+
+            let text = textView.string
+            let fullRange = NSRange(location: 0, length: text.utf16.count)
+
+            // Clear any previous search highlight temporary attributes
+            layoutManager.removeTemporaryAttribute(.backgroundColor, forCharacterRange: fullRange)
+
+            guard let searchState = searchState else {
+                resetHighlightTracking()
+                return
+            }
+
+            let matches = searchState.matches
+            let currentIndex = searchState.currentMatchIndex
+
+            guard !matches.isEmpty else {
+                resetHighlightTracking()
+                return
+            }
+
+            // Check if highlights actually changed to avoid redundant work
+            if matches.count == lastHighlightedMatchCount
+                && currentIndex == lastHighlightedMatchIndex
+                && searchState.searchText == lastHighlightedSearchText {
+                return
+            }
+            lastHighlightedMatchCount = matches.count
+            lastHighlightedMatchIndex = currentIndex
+            lastHighlightedSearchText = searchState.searchText
+
+            // Highlight all matches with a yellow background
+            let matchColor = NSColor.yellow.withAlphaComponent(0.3)
+            let currentMatchColor = NSColor.orange.withAlphaComponent(0.5)
+
+            for (index, range) in matches.enumerated() {
+                let nsRange = NSRange(range, in: text)
+                guard nsRange.location != NSNotFound,
+                      nsRange.location + nsRange.length <= text.utf16.count else { continue }
+
+                let color = (index == currentIndex) ? currentMatchColor : matchColor
+                layoutManager.addTemporaryAttribute(.backgroundColor, value: color, forCharacterRange: nsRange)
+            }
+
+            // Scroll to the current match
+            if currentIndex < matches.count {
+                let currentNSRange = NSRange(matches[currentIndex], in: text)
+                if currentNSRange.location != NSNotFound {
+                    textView.scrollRangeToVisible(currentNSRange)
+                }
+            }
+        }
+
+        private func resetHighlightTracking() {
+            lastHighlightedMatchCount = 0
+            lastHighlightedMatchIndex = -1
+            lastHighlightedSearchText = ""
+        }
     }
 }
 #endif
@@ -723,9 +808,11 @@ struct iOSTextEditor: UIViewRepresentable {
     let lineHeightMultiple: Double
     let fontName: String
     var isReadOnly: Bool = false
+    // TODO: Implement search match highlighting for iOS (T-000016)
+    var searchState: SearchState?
     let onLineCountChange: (Int) -> Void
     let onScrollChange: (CGFloat, CGFloat, CGFloat) -> Void  // offset, height, lineHeight
-    
+
     private func getFont() -> UIFont {
         if fontName == "Menlo" || fontName.isEmpty {
             return UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)

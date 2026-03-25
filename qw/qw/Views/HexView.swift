@@ -50,6 +50,9 @@ struct HexView: View {
     /// Read-only data — used when `hexDocument` is not provided.
     private let readOnlyData: Data?
 
+    /// Optional file URL — needed for ffprobe metadata extraction.
+    private let fileURL: URL?
+
     /// Editable document model — nil in read-only mode.
     @ObservedObject private var hexDocumentStorage: HexDocument
 
@@ -99,6 +102,17 @@ struct HexView: View {
     @State private var cachedAnnotations: [FieldValue] = []
     @State private var cachedAnnotationsDataCount: Int = -1
 
+    // MARK: - EXIF metadata state
+
+    @State private var cachedExifMetadata: ExifMetadata = ExifMetadata(entries: [])
+    @State private var cachedExifDataCount: Int = -1
+
+    // MARK: - FFprobe metadata state
+
+    @State private var ffprobeResult: FFprobeResult?
+    @State private var ffprobeTask: Task<Void, Never>?
+    @State private var showMediaMetadata: Bool = false
+
     /// The normalized (ordered) range of selected byte indices, if any.
     private var selectionRange: ClosedRange<Int>? {
         guard let s = selectionStart, let e = selectionEnd else { return nil }
@@ -121,20 +135,23 @@ struct HexView: View {
     /// Opens a file with memory-mapped I/O (`mappedIfSafe`). Read-only.
     init(url: URL) {
         self.readOnlyData = (try? Data(contentsOf: url, options: .mappedIfSafe)) ?? Data()
+        self.fileURL = url
         self._hexDocumentStorage = ObservedObject(wrappedValue: HexDocument(data: Data()))
         self.isEditable = false
     }
 
     /// Standard read-only initializer for in-memory data.
-    init(data: Data) {
+    init(data: Data, fileURL: URL? = nil) {
         self.readOnlyData = data
+        self.fileURL = fileURL
         self._hexDocumentStorage = ObservedObject(wrappedValue: HexDocument(data: Data()))
         self.isEditable = false
     }
 
     /// Editable initializer — full editing support with undo/redo.
-    init(hexDocument: HexDocument) {
+    init(hexDocument: HexDocument, fileURL: URL? = nil) {
         self.readOnlyData = nil
+        self.fileURL = fileURL
         self._hexDocumentStorage = ObservedObject(wrappedValue: hexDocument)
         self.isEditable = true
     }
@@ -198,9 +215,57 @@ struct HexView: View {
         }
     }
 
+    /// Recompute EXIF metadata if data has changed.
+    /// Only parses for image formats (JPEG, PNG) to avoid unnecessary work.
+    private func updateExifIfNeeded() {
+        let count = displayData.count
+        if count != cachedExifDataCount {
+            cachedExifDataCount = count
+            if let sig = MagicBytes.detect(from: displayData),
+               sig.name == "JPEG Image" || sig.name == "PNG Image" {
+                cachedExifMetadata = ExifParser.parse(data: displayData)
+            } else {
+                cachedExifMetadata = ExifMetadata(entries: [])
+            }
+        }
+    }
+
     /// Tooltip for a byte from field annotations, if any.
     private func annotationTooltip(for index: Int) -> String? {
         FileAnnotator.tooltip(for: index, in: cachedAnnotations)
+    }
+
+    /// Determine if the current file is audio/video and invoke ffprobe if so.
+    private func triggerFFprobeIfNeeded() {
+        guard let url = fileURL else { return }
+        guard ffprobeResult == nil else { return } // already probed
+
+        let data = displayData
+        // Check hardcoded magic bytes
+        let isMedia: Bool
+        if let sig = MagicBytes.detect(from: data),
+           FFprobeService.isAudioVideoFormat(signatureName: sig.name) {
+            isMedia = true
+        } else if let dbSig = FormatDatabase.shared.detectSignature(from: data),
+                  FFprobeService.isAudioVideoCategory(dbSig.category) ||
+                  FFprobeService.isAudioVideoFormat(signatureName: dbSig.name) {
+            isMedia = true
+        } else {
+            isMedia = false
+        }
+
+        guard isMedia else { return }
+
+        showMediaMetadata = true
+        ffprobeTask?.cancel()
+        ffprobeTask = Task {
+            let result = await FFprobeService.probe(fileURL: url)
+            if !Task.isCancelled {
+                await MainActor.run {
+                    ffprobeResult = result
+                }
+            }
+        }
     }
 
     /// Recompute file sections if data has changed.
@@ -272,7 +337,11 @@ struct HexView: View {
                 }
                 if showAnnotationPanel {
                     Divider()
-                    AnnotationPanelView(annotations: cachedAnnotations)
+                    AnnotationPanelView(annotations: cachedAnnotations, exifMetadata: cachedExifMetadata)
+                }
+                if showMediaMetadata {
+                    Divider()
+                    MediaMetadataPanel(result: ffprobeResult)
                 }
             }
         }
@@ -313,6 +382,16 @@ struct HexView: View {
                     Image(systemName: "doc.text.magnifyingglass")
                 }
                 .help("Toggle Format Annotations")
+
+                Button {
+                    showMediaMetadata.toggle()
+                    if showMediaMetadata {
+                        triggerFFprobeIfNeeded()
+                    }
+                } label: {
+                    Image(systemName: "film")
+                }
+                .help("Toggle Media Metadata (ffprobe)")
             }
         }
         .onAppear {
@@ -321,6 +400,8 @@ struct HexView: View {
             }
             updateSectionsIfNeeded()
             updateAnnotationsIfNeeded()
+            updateExifIfNeeded()
+            triggerFFprobeIfNeeded()
         }
         .onChange(of: environmentUndoManager) { _, newValue in
             if isEditable {
@@ -330,6 +411,7 @@ struct HexView: View {
         .onChange(of: displayData.count) { _, _ in
             updateSectionsIfNeeded()
             updateAnnotationsIfNeeded()
+            updateExifIfNeeded()
         }
     }
 

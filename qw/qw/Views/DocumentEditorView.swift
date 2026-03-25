@@ -92,7 +92,7 @@ struct DocumentEditorView: View {
                 }
                 .accessibilityIdentifier("hexDiffViewer")
             } else if isHexMode {
-                HexView(data: document.rawData)
+                HexView(data: document.rawData, fileURL: fileURL)
                     .accessibilityIdentifier("hexViewer")
             } else {
                 CodeEditorView(

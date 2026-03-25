@@ -3,7 +3,7 @@
 # Each [[format]] entry defines a binary file signature with optional
 # sections and fields.  Grouped by category for readability.
 #
-# Categories: image, video, audio, document, proprietary
+# Categories: image, video, audio, document, 3d-open, proprietary
 #
 # Ticket: T-000040
 
@@ -236,6 +236,56 @@ offset = 0
 priority = 10
 
 
+[[format]]
+id = 23
+name = "BMP Image"
+description = "Windows Bitmap image"
+category = "image"
+magic_bytes = [0x42, 0x4D]
+offset = 0
+priority = 10
+
+
+[[format]]
+id = 24
+name = "TIFF Image (LE)"
+description = "Tagged Image File Format (little-endian)"
+category = "image"
+magic_bytes = [0x49, 0x49, 0x2A, 0x00]
+offset = 0
+priority = 10
+
+
+[[format]]
+id = 25
+name = "TIFF Image (BE)"
+description = "Tagged Image File Format (big-endian)"
+category = "image"
+magic_bytes = [0x4D, 0x4D, 0x00, 0x2A]
+offset = 0
+priority = 10
+
+
+[[format]]
+id = 26
+name = "WebP Image"
+description = "WebP image (RIFF container)"
+category = "image"
+magic_bytes = [0x57, 0x45, 0x42, 0x50]
+offset = 8
+priority = 10
+
+
+[[format]]
+id = 27
+name = "ICO Image"
+description = "Windows Icon format"
+category = "image"
+magic_bytes = [0x00, 0x00, 0x01, 0x00]
+offset = 0
+priority = 10
+
+
 # ─── Video ───────────────────────────────────────────────────────────
 
 [[format]]
@@ -248,6 +298,56 @@ offset = 4
 priority = 10
 
 
+[[format]]
+id = 28
+name = "AVI Video"
+description = "Audio Video Interleave (RIFF container)"
+category = "video"
+magic_bytes = [0x41, 0x56, 0x49, 0x20]
+offset = 8
+priority = 10
+
+
+[[format]]
+id = 29
+name = "MKV/WebM Video"
+description = "Matroska/WebM video container (EBML header)"
+category = "video"
+magic_bytes = [0x1A, 0x45, 0xDF, 0xA3]
+offset = 0
+priority = 10
+
+
+[[format]]
+id = 30
+name = "MOV Video"
+description = "Apple QuickTime Movie container"
+category = "video"
+magic_bytes = [0x6D, 0x6F, 0x6F, 0x76]
+offset = 4
+priority = 9
+
+
+[[format]]
+id = 31
+name = "MOV Video (ftyp qt)"
+description = "Apple QuickTime Movie container (ftyp qt variant)"
+category = "video"
+magic_bytes = [0x66, 0x74, 0x79, 0x70, 0x71, 0x74]
+offset = 4
+priority = 11
+
+
+[[format]]
+id = 32
+name = "FLV Video"
+description = "Flash Video container"
+category = "video"
+magic_bytes = [0x46, 0x4C, 0x56]
+offset = 0
+priority = 10
+
+
 # ─── Audio ───────────────────────────────────────────────────────────
 
 [[format]]
@@ -256,6 +356,76 @@ name = "RIFF (WAV/AVI)"
 description = "Resource Interchange File Format container"
 category = "audio"
 magic_bytes = [0x52, 0x49, 0x46, 0x46]
+offset = 0
+priority = 10
+
+
+[[format]]
+id = 33
+name = "MP3 Audio (frame sync)"
+description = "MP3 audio with frame sync header"
+category = "audio"
+magic_bytes = [0xFF, 0xFB]
+offset = 0
+priority = 8
+
+
+[[format]]
+id = 34
+name = "MP3 Audio (ID3)"
+description = "MP3 audio with ID3 tag"
+category = "audio"
+magic_bytes = [0x49, 0x44, 0x33]
+offset = 0
+priority = 10
+
+
+[[format]]
+id = 35
+name = "FLAC Audio"
+description = "Free Lossless Audio Codec"
+category = "audio"
+magic_bytes = [0x66, 0x4C, 0x61, 0x43]
+offset = 0
+priority = 10
+
+
+[[format]]
+id = 36
+name = "OGG Audio"
+description = "Ogg Vorbis/Opus audio container"
+category = "audio"
+magic_bytes = [0x4F, 0x67, 0x67, 0x53]
+offset = 0
+priority = 10
+
+
+[[format]]
+id = 37
+name = "AAC/M4A Audio"
+description = "AAC audio in MPEG-4 container (ftyp M4A)"
+category = "audio"
+magic_bytes = [0x66, 0x74, 0x79, 0x70, 0x4D, 0x34, 0x41]
+offset = 4
+priority = 11
+
+
+[[format]]
+id = 38
+name = "AIFF Audio"
+description = "Audio Interchange File Format"
+category = "audio"
+magic_bytes = [0x46, 0x4F, 0x52, 0x4D]
+offset = 0
+priority = 10
+
+
+[[format]]
+id = 39
+name = "MIDI Audio"
+description = "Musical Instrument Digital Interface"
+category = "audio"
+magic_bytes = [0x4D, 0x54, 0x68, 0x64]
 offset = 0
 priority = 10
 
@@ -297,6 +467,38 @@ category = "document"
 magic_bytes = [0x7B]
 offset = 0
 priority = 1
+
+
+[[format]]
+id = 40
+name = "HTML Document"
+description = "HTML document (heuristic, matches <!DOC)"
+category = "document"
+magic_bytes = [0x3C, 0x21, 0x44, 0x4F, 0x43]
+offset = 0
+priority = 2
+
+
+# ─── 3D Open Formats ────────────────────────────────────────────────
+
+[[format]]
+id = 41
+name = "GLB (glTF Binary)"
+description = "glTF binary 3D model container"
+category = "3d-open"
+magic_bytes = [0x67, 0x6C, 0x54, 0x46]
+offset = 0
+priority = 10
+
+
+[[format]]
+id = 42
+name = "PLY (Polygon File)"
+description = "Polygon File Format / Stanford Triangle Format"
+category = "3d-open"
+magic_bytes = [0x70, 0x6C, 0x79]
+offset = 0
+priority = 10
 
 
 # ─── Proprietary ─────────────────────────────────────────────────────
@@ -532,3 +734,23 @@ category = "proprietary"
 magic_bytes = [0x53, 0x51, 0x4C, 0x69, 0x74, 0x65]
 offset = 0
 priority = 10
+
+
+[[format]]
+id = 43
+name = "PSD Image"
+description = "Adobe Photoshop Document"
+category = "proprietary"
+magic_bytes = [0x38, 0x42, 0x50, 0x53]
+offset = 0
+priority = 10
+
+
+[[format]]
+id = 44
+name = "Office Open XML (DOCX/XLSX/PPTX)"
+description = "Microsoft Office Open XML document (same magic as ZIP)"
+category = "proprietary"
+magic_bytes = [0x50, 0x4B, 0x03, 0x04]
+offset = 0
+priority = 5

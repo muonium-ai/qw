@@ -67,21 +67,16 @@ class QWAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Initialize read-only file manager to check for CLI-passed files
         _ = ReadOnlyFileManager.shared
-        
-        // Create a new document on launch if no documents are open
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            if NSDocumentController.shared.documents.isEmpty {
-                NSDocumentController.shared.newDocument(nil)
-            }
-        }
     }
-    
+
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
         return true
     }
-    
-    func applicationOpenUntitledFile(_ sender: NSApplication) -> Bool {
-        NSDocumentController.shared.newDocument(nil)
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            NSDocumentController.shared.newDocument(nil)
+        }
         return true
     }
 }

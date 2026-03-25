@@ -64,6 +64,7 @@ NC := \033[0m # No Color
 .PHONY: all clean build build-mac build-ios build-ipad build-all \
 	build-cli run-cli \
 	build-wasm run-wasm run-wasm-dev \
+	bump-version \
 	deploy deploy-mac deploy-ios deploy-ipad \
 	test run run-ios run-ipad icons help check-tools install install-cli uninstall
 
@@ -216,9 +217,18 @@ icons:
 	@echo "$(YELLOW)Remember to update Contents.json with the new filenames$(NC)"
 
 #------------------------------------------------------------------------------
+# Auto-increment build number (timestamp-based: YYYYMMDDHHmm)
+#------------------------------------------------------------------------------
+bump-version:
+	@BUILD_NUM=$$(date +%Y%m%d%H%M); \
+	echo "$(YELLOW)Setting build number to $$BUILD_NUM$(NC)"; \
+	cd $(PROJECT_DIR) && xcrun agvtool new-version -all $$BUILD_NUM > /dev/null 2>&1; \
+	echo "$(GREEN)Version: 1.0 ($$BUILD_NUM)$(NC)"
+
+#------------------------------------------------------------------------------
 # Build for macOS
 #------------------------------------------------------------------------------
-build-mac: check-tools
+build-mac: check-tools bump-version
 	@echo "$(YELLOW)Building for macOS...$(NC)"
 	@mkdir -p $(BUILD_DIR)/mac
 	@set -o pipefail; \
@@ -252,7 +262,7 @@ build-ios: build-ipad
 #------------------------------------------------------------------------------
 # Build for iPadOS (iPad)
 #------------------------------------------------------------------------------
-build-ipad: check-tools
+build-ipad: check-tools bump-version
 	@echo "$(YELLOW)Building for iPadOS (iPad)...$(NC)"
 	@if [ -z "$(IPAD_SIMULATOR_ID)" ] && [ -z "$(IPAD_SIMULATOR_NAME)" ]; then \
 		echo "$(RED)Error: No available iPad simulator found. Install an iPad simulator in Xcode > Settings > Platforms.$(NC)"; \

@@ -91,6 +91,8 @@ struct qwApp: App {
     @FocusedValue(\.documentExportPNGAction) private var documentExportPNGAction
     @FocusedValue(\.toggleReadOnlyAction) private var toggleReadOnlyAction
     @FocusedValue(\.isReadOnly) private var isReadOnly
+    @FocusedValue(\.toggleHexModeAction) private var toggleHexModeAction
+    @FocusedValue(\.isHexMode) private var isHexMode
     
     #if os(macOS)
     @NSApplicationDelegateAdaptor(QWAppDelegate.self) var appDelegate
@@ -235,6 +237,13 @@ struct qwApp: App {
                     toggleReadOnlyAction?()
                 }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
+
+                Divider()
+
+                Button(isHexMode == true ? "✓ Hex Mode" : "Hex Mode") {
+                    toggleHexModeAction?()
+                }
+                .keyboardShortcut("h", modifiers: [.command, .shift])
             }
         }
         #endif

@@ -21,12 +21,14 @@ struct DocumentEditorView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var fileType: SupportedFileType = .plainText
     @State private var isReadOnly: Bool = false
+    @State private var isHexMode: Bool = false
+    @State private var showBinaryAlert: Bool = false
     @StateObject private var searchState = SearchState()
-    
+
     var body: some View {
         VStack(spacing: 0) {
-            // Search/Replace bar
-            if searchState.isVisible {
+            // Search/Replace bar (hidden in hex mode)
+            if searchState.isVisible && !isHexMode {
                 SearchReplaceView(
                     searchText: $searchState.searchText,
                     replaceText: $searchState.replaceText,
@@ -55,20 +57,25 @@ struct DocumentEditorView: View {
                     searchState.findMatches(in: document.text)
                 }
             }
-            
-            // Editor
-            CodeEditorView(
-                text: $document.text,
-                fileType: fileType,
-                fileName: fileURL?.lastPathComponent,
-                isReadOnly: isReadOnly,
-                searchState: searchState
-            )
-            .accessibilityIdentifier("documentEditor")
-            #if os(macOS)
-            .background(WindowTitleModeUpdater(isReadOnly: isReadOnly))
-            #endif
+
+            // Editor or Hex View
+            if isHexMode {
+                HexView(data: document.rawData)
+                    .accessibilityIdentifier("hexViewer")
+            } else {
+                CodeEditorView(
+                    text: $document.text,
+                    fileType: fileType,
+                    fileName: fileURL?.lastPathComponent,
+                    isReadOnly: isReadOnly,
+                    searchState: searchState
+                )
+                .accessibilityIdentifier("documentEditor")
+            }
         }
+        #if os(macOS)
+        .background(WindowTitleModeUpdater(isReadOnly: isReadOnly, isHexMode: isHexMode))
+        #endif
         .onAppear {
             updateFileType()
             // Check if this file was opened in read-only mode from CLI
@@ -88,9 +95,24 @@ struct DocumentEditorView: View {
                 // New untitled documents should start writable
                 isReadOnly = false
             }
+
+            // Auto-detect binary files and prompt for hex mode
+            if document.isBinaryDetected {
+                showBinaryAlert = true
+            }
         }
         .onChange(of: fileURL) { _, _ in
             updateFileType()
+        }
+        .alert("Binary File Detected", isPresented: $showBinaryAlert) {
+            Button("Hex Mode") {
+                isHexMode = true
+            }
+            Button("Text Mode", role: .cancel) {
+                isHexMode = false
+            }
+        } message: {
+            Text("This file appears to be binary. Open in hex mode?")
         }
         #if os(macOS)
         .toolbar {
@@ -112,12 +134,15 @@ struct DocumentEditorView: View {
         .focusedSceneValue(\.documentExportPNGAction, { exportAsPNG() })
         .focusedSceneValue(\.toggleReadOnlyAction, { isReadOnly.toggle() })
         .focusedSceneValue(\.isReadOnly, isReadOnly)
+        .focusedSceneValue(\.toggleHexModeAction, { isHexMode.toggle() })
+        .focusedSceneValue(\.isHexMode, isHexMode)
         #endif
     }
 
         #if os(macOS)
         private struct WindowTitleModeUpdater: NSViewRepresentable {
             let isReadOnly: Bool
+            let isHexMode: Bool
 
             func makeNSView(context: Context) -> NSView {
                 let view = NSView(frame: .zero)
@@ -135,7 +160,10 @@ struct DocumentEditorView: View {
 
             private func updateWindowTitle(for window: NSWindow?) {
                 guard let window = window else { return }
-                let modeText = isReadOnly ? "Read Only" : "Write"
+                var modeText = isReadOnly ? "Read Only" : "Write"
+                if isHexMode {
+                    modeText = "Hex — \(modeText)"
+                }
                 if #available(macOS 11.0, *) {
                     window.subtitle = modeText
                 } else {
@@ -145,7 +173,7 @@ struct DocumentEditorView: View {
             }
 
             private func stripModeSuffix(from title: String) -> String {
-                let suffixes = [" — Read Only", " — Write"]
+                let suffixes = [" — Read Only", " — Write", " — Hex — Read Only", " — Hex — Write"]
                 for suffix in suffixes where title.hasSuffix(suffix) {
                     return String(title.dropLast(suffix.count))
                 }
@@ -274,6 +302,14 @@ struct IsReadOnlyFocusKey: FocusedValueKey {
     typealias Value = Bool
 }
 
+struct ToggleHexModeActionFocusKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
+struct IsHexModeFocusKey: FocusedValueKey {
+    typealias Value = Bool
+}
+
 extension FocusedValues {
     var searchState: SearchState? {
         get { self[SearchStateFocusKey.self] }
@@ -308,6 +344,16 @@ extension FocusedValues {
     var isReadOnly: Bool? {
         get { self[IsReadOnlyFocusKey.self] }
         set { self[IsReadOnlyFocusKey.self] = newValue }
+    }
+
+    var toggleHexModeAction: (() -> Void)? {
+        get { self[ToggleHexModeActionFocusKey.self] }
+        set { self[ToggleHexModeActionFocusKey.self] = newValue }
+    }
+
+    var isHexMode: Bool? {
+        get { self[IsHexModeFocusKey.self] }
+        set { self[IsHexModeFocusKey.self] = newValue }
     }
 }
 

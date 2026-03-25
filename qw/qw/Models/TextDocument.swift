@@ -48,7 +48,11 @@ enum SupportedFileType: String, CaseIterable {
 struct TextDocument: FileDocument {
     var text: String
     var fileType: SupportedFileType
-    
+    /// Raw file bytes, kept for hex viewing (especially useful for binary files).
+    var rawData: Data
+    /// Whether binary content was detected when opening the file.
+    var isBinaryDetected: Bool = false
+
     static var readableContentTypes: [UTType] {
         [
             .plainText,
@@ -61,37 +65,75 @@ struct TextDocument: FileDocument {
             .swiftSource,
             .sourceCode,
             .shellScript,
+            .data,
             UTType(filenameExtension: "md") ?? .plainText,
             UTType(filenameExtension: "css") ?? .plainText,
         ]
     }
-    
+
     static var writableContentTypes: [UTType] {
-        readableContentTypes
+        // Exclude .data from writable types — we don't write binary files as text
+        readableContentTypes.filter { $0 != .data }
     }
-    
+
+    /// Checks the first 8 KB of data for null bytes or invalid UTF-8,
+    /// which indicates the file is likely binary.
+    static func isBinaryData(_ data: Data) -> Bool {
+        guard !data.isEmpty else { return false }
+        let sampleSize = min(data.count, 8192)
+        let sample = data.prefix(sampleSize)
+
+        // Check for null bytes — strong binary indicator
+        if sample.contains(0x00) {
+            return true
+        }
+
+        // Check if the sample is valid UTF-8
+        if String(data: Data(sample), encoding: .utf8) == nil {
+            return true
+        }
+
+        return false
+    }
+
     init(text: String = "", fileType: SupportedFileType = .plainText) {
         self.text = text
         self.fileType = fileType
+        self.rawData = text.data(using: .utf8) ?? Data()
     }
-    
+
     init(configuration: ReadConfiguration) throws {
-        guard let data = configuration.file.regularFileContents,
-              let string = String(data: data, encoding: .utf8)
-        else {
+        guard let data = configuration.file.regularFileContents else {
             throw CocoaError(.fileReadCorruptFile)
         }
-        text = string
-        
+
+        rawData = data
+
         // Determine file type from content type
         if let ext = configuration.contentType.preferredFilenameExtension {
             fileType = SupportedFileType.from(extension: ext)
         } else {
             fileType = .plainText
         }
+
+        // If binary, store data but use a placeholder for text
+        if TextDocument.isBinaryData(data) {
+            isBinaryDetected = true
+            text = ""
+        } else if let string = String(data: data, encoding: .utf8) {
+            text = string
+        } else {
+            // Fallback: treat as binary
+            isBinaryDetected = true
+            text = ""
+        }
     }
-    
+
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        if isBinaryDetected {
+            // Write back the original raw data for binary files
+            return .init(regularFileWithContents: rawData)
+        }
         let data = text.data(using: .utf8) ?? Data()
         return .init(regularFileWithContents: data)
     }

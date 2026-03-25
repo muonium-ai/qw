@@ -18,6 +18,7 @@ struct DBFileSignature {
     let id: Int
     let name: String
     let description: String
+    let category: String
     let matchedRange: Range<Int>
 }
 
@@ -88,7 +89,7 @@ final class FormatDatabase {
         guard !data.isEmpty else { return nil }
 
         let sql = """
-            SELECT id, name, description, magic_bytes, magic_offset, magic_mask
+            SELECT id, name, description, category, magic_bytes, magic_offset, magic_mask
             FROM signatures
             ORDER BY priority DESC, LENGTH(magic_bytes) DESC
             """
@@ -101,17 +102,18 @@ final class FormatDatabase {
             let rowId = Int(sqlite3_column_int64(stmt, 0))
             let name = String(cString: sqlite3_column_text(stmt, 1))
             let desc = sqlite3_column_text(stmt, 2).map { String(cString: $0) } ?? ""
+            let cat = sqlite3_column_text(stmt, 3).map { String(cString: $0) } ?? ""
 
-            let blobPtr = sqlite3_column_blob(stmt, 3)
-            let blobLen = Int(sqlite3_column_bytes(stmt, 3))
+            let blobPtr = sqlite3_column_blob(stmt, 4)
+            let blobLen = Int(sqlite3_column_bytes(stmt, 4))
             guard let ptr = blobPtr, blobLen > 0 else { continue }
             let magicBytes = Data(bytes: ptr, count: blobLen)
 
-            let offset = Int(sqlite3_column_int(stmt, 4))
+            let offset = Int(sqlite3_column_int(stmt, 5))
 
             // Optional mask
-            let maskPtr = sqlite3_column_blob(stmt, 5)
-            let maskLen = Int(sqlite3_column_bytes(stmt, 5))
+            let maskPtr = sqlite3_column_blob(stmt, 6)
+            let maskLen = Int(sqlite3_column_bytes(stmt, 6))
             let mask: Data? = (maskPtr != nil && maskLen == blobLen)
                 ? Data(bytes: maskPtr!, count: maskLen)
                 : nil
@@ -141,6 +143,7 @@ final class FormatDatabase {
                     id: rowId,
                     name: name,
                     description: desc,
+                    category: cat,
                     matchedRange: offset..<endIndex
                 )
             }

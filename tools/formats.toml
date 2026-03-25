@@ -1,0 +1,534 @@
+# formats.toml — File format definitions for qw hex editor
+#
+# Each [[format]] entry defines a binary file signature with optional
+# sections and fields.  Grouped by category for readability.
+#
+# Categories: image, video, audio, document, proprietary
+#
+# Ticket: T-000040
+
+# ─── Image ───────────────────────────────────────────────────────────
+
+[[format]]
+id = 1
+name = "PNG Image"
+description = "Portable Network Graphics image"
+category = "image"
+magic_bytes = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+offset = 0
+priority = 10
+
+[[format.sections]]
+name = "PNG Signature"
+kind = "signature"
+description = "8-byte PNG file signature (\\x89PNG\\r\\n\\x1a\\n)"
+offset_expr = "0"
+length_expr = "8"
+
+[[format.sections]]
+name = "IHDR"
+kind = "header"
+description = "Image header: width, height, bit depth, color type"
+offset_expr = "8"
+length_expr = "25"
+
+[[format.fields]]
+section_name = "PNG Signature"
+name = "PNG Signature"
+offset = 0
+size = 8
+type = "magic"
+endianness = "big"
+display_format = "hex"
+
+[[format.fields]]
+section_name = "IHDR"
+name = "IHDR Length"
+offset = 8
+size = 4
+type = "uint32"
+endianness = "big"
+display_format = "decimal"
+
+[[format.fields]]
+section_name = "IHDR"
+name = "IHDR Chunk Type"
+offset = 12
+size = 4
+type = "ascii"
+endianness = "big"
+display_format = "string"
+
+[[format.fields]]
+section_name = "IHDR"
+name = "Width"
+offset = 16
+size = 4
+type = "uint32"
+endianness = "big"
+display_format = "decimal"
+
+[[format.fields]]
+section_name = "IHDR"
+name = "Height"
+offset = 20
+size = 4
+type = "uint32"
+endianness = "big"
+display_format = "decimal"
+
+[[format.fields]]
+section_name = "IHDR"
+name = "Bit Depth"
+offset = 24
+size = 1
+type = "uint8"
+endianness = "big"
+display_format = "decimal"
+
+[[format.fields]]
+section_name = "IHDR"
+name = "Color Type"
+offset = 25
+size = 1
+type = "uint8"
+endianness = "big"
+display_format = "decimal"
+value_map = { "0" = "Grayscale", "2" = "RGB", "3" = "Indexed", "4" = "Grayscale+Alpha", "6" = "RGBA" }
+
+[[format.fields]]
+section_name = "IHDR"
+name = "Compression"
+offset = 26
+size = 1
+type = "uint8"
+endianness = "big"
+display_format = "decimal"
+value_map = { "0" = "Deflate" }
+
+[[format.fields]]
+section_name = "IHDR"
+name = "Filter"
+offset = 27
+size = 1
+type = "uint8"
+endianness = "big"
+display_format = "decimal"
+value_map = { "0" = "Adaptive" }
+
+[[format.fields]]
+section_name = "IHDR"
+name = "Interlace"
+offset = 28
+size = 1
+type = "uint8"
+endianness = "big"
+display_format = "decimal"
+value_map = { "0" = "None", "1" = "Adam7" }
+
+
+[[format]]
+id = 2
+name = "JPEG Image"
+description = "JPEG/JFIF image"
+category = "image"
+magic_bytes = [0xFF, 0xD8, 0xFF]
+offset = 0
+priority = 10
+
+[[format.sections]]
+name = "SOI"
+kind = "signature"
+description = "Start of Image marker (FF D8)"
+offset_expr = "0"
+length_expr = "2"
+
+[[format.fields]]
+section_name = "SOI"
+name = "SOI Marker"
+offset = 0
+size = 2
+type = "magic"
+endianness = "big"
+display_format = "hex"
+
+[[format.fields]]
+section_name = "APP0"
+name = "APP0 Marker"
+offset = 2
+size = 2
+type = "magic"
+endianness = "big"
+display_format = "hex"
+
+[[format.fields]]
+section_name = "APP0"
+name = "APP0 Length"
+offset = 4
+size = 2
+type = "uint16"
+endianness = "big"
+display_format = "decimal"
+
+[[format.fields]]
+section_name = "APP0"
+name = "Identifier"
+offset = 6
+size = 5
+type = "ascii"
+endianness = "big"
+display_format = "string"
+
+[[format.fields]]
+section_name = "APP0"
+name = "Version Major"
+offset = 11
+size = 1
+type = "uint8"
+endianness = "big"
+display_format = "decimal"
+
+[[format.fields]]
+section_name = "APP0"
+name = "Version Minor"
+offset = 12
+size = 1
+type = "uint8"
+endianness = "big"
+display_format = "decimal"
+
+[[format.fields]]
+section_name = "APP0"
+name = "Density Units"
+offset = 13
+size = 1
+type = "uint8"
+endianness = "big"
+display_format = "decimal"
+value_map = { "0" = "No units (aspect ratio)", "1" = "Pixels/inch", "2" = "Pixels/cm" }
+
+[[format.fields]]
+section_name = "APP0"
+name = "X Density"
+offset = 14
+size = 2
+type = "uint16"
+endianness = "big"
+display_format = "decimal"
+
+[[format.fields]]
+section_name = "APP0"
+name = "Y Density"
+offset = 16
+size = 2
+type = "uint16"
+endianness = "big"
+display_format = "decimal"
+
+
+[[format]]
+id = 3
+name = "GIF Image"
+description = "Graphics Interchange Format image"
+category = "image"
+magic_bytes = [0x47, 0x49, 0x46, 0x38]
+offset = 0
+priority = 10
+
+
+# ─── Video ───────────────────────────────────────────────────────────
+
+[[format]]
+id = 22
+name = "MP4 Video"
+description = "MPEG-4 Part 14 video container"
+category = "video"
+magic_bytes = [0x66, 0x74, 0x79, 0x70]
+offset = 4
+priority = 10
+
+
+# ─── Audio ───────────────────────────────────────────────────────────
+
+[[format]]
+id = 17
+name = "RIFF (WAV/AVI)"
+description = "Resource Interchange File Format container"
+category = "audio"
+magic_bytes = [0x52, 0x49, 0x46, 0x46]
+offset = 0
+priority = 10
+
+
+# ─── Document ────────────────────────────────────────────────────────
+
+[[format]]
+id = 4
+name = "PDF Document"
+description = "Portable Document Format"
+category = "document"
+magic_bytes = [0x25, 0x50, 0x44, 0x46]
+offset = 0
+priority = 10
+
+[[format.sections]]
+name = "PDF Header"
+kind = "header"
+description = "PDF version header (e.g. %PDF-1.7)"
+offset_expr = "0"
+length_expr = "9"
+
+
+[[format]]
+id = 20
+name = "XML"
+description = "XML document"
+category = "document"
+magic_bytes = [0x3C, 0x3F, 0x78, 0x6D, 0x6C]
+offset = 0
+priority = 2
+
+
+[[format]]
+id = 21
+name = "JSON (heuristic)"
+description = "Likely JSON document"
+category = "document"
+magic_bytes = [0x7B]
+offset = 0
+priority = 1
+
+
+# ─── Proprietary ─────────────────────────────────────────────────────
+
+[[format]]
+id = 5
+name = "ZIP Archive"
+description = "ZIP compressed archive"
+category = "proprietary"
+magic_bytes = [0x50, 0x4B, 0x03, 0x04]
+offset = 0
+priority = 10
+
+
+[[format]]
+id = 6
+name = "ZIP Archive (empty)"
+description = "ZIP archive (empty archive)"
+category = "proprietary"
+magic_bytes = [0x50, 0x4B, 0x05, 0x06]
+offset = 0
+priority = 9
+
+
+[[format]]
+id = 7
+name = "Gzip"
+description = "Gzip compressed data"
+category = "proprietary"
+magic_bytes = [0x1F, 0x8B]
+offset = 0
+priority = 10
+
+
+[[format]]
+id = 8
+name = "Bzip2"
+description = "Bzip2 compressed data"
+category = "proprietary"
+magic_bytes = [0x42, 0x5A, 0x68]
+offset = 0
+priority = 10
+
+
+[[format]]
+id = 9
+name = "XZ"
+description = "XZ compressed data"
+category = "proprietary"
+magic_bytes = [0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00]
+offset = 0
+priority = 10
+
+
+[[format]]
+id = 10
+name = "Mach-O Universal Binary"
+description = "Mach-O universal (fat) binary"
+category = "proprietary"
+magic_bytes = [0xCA, 0xFE, 0xBA, 0xBE]
+offset = 0
+priority = 10
+
+
+[[format]]
+id = 11
+name = "Mach-O (32-bit)"
+description = "Mach-O 32-bit executable"
+category = "proprietary"
+magic_bytes = [0xFE, 0xED, 0xFA, 0xCE]
+offset = 0
+priority = 10
+
+
+[[format]]
+id = 12
+name = "Mach-O (64-bit)"
+description = "Mach-O 64-bit executable"
+category = "proprietary"
+magic_bytes = [0xFE, 0xED, 0xFA, 0xCF]
+offset = 0
+priority = 10
+
+
+[[format]]
+id = 13
+name = "Mach-O (64-bit, reversed)"
+description = "Mach-O 64-bit executable (little-endian)"
+category = "proprietary"
+magic_bytes = [0xCF, 0xFA, 0xED, 0xFE]
+offset = 0
+priority = 10
+
+
+[[format]]
+id = 14
+name = "Mach-O (32-bit, reversed)"
+description = "Mach-O 32-bit executable (little-endian)"
+category = "proprietary"
+magic_bytes = [0xCE, 0xFA, 0xED, 0xFE]
+offset = 0
+priority = 10
+
+
+[[format]]
+id = 15
+name = "ELF Executable"
+description = "Executable and Linkable Format"
+category = "proprietary"
+magic_bytes = [0x7F, 0x45, 0x4C, 0x46]
+offset = 0
+priority = 10
+
+[[format.sections]]
+name = "ELF Header"
+kind = "header"
+description = "ELF 64-bit header"
+offset_expr = "0"
+length_expr = "64"
+
+[[format.fields]]
+section_name = "ELF Header"
+name = "ELF Magic"
+offset = 0
+size = 4
+type = "magic"
+endianness = "big"
+display_format = "hex"
+
+[[format.fields]]
+section_name = "ELF Header"
+name = "Class"
+offset = 4
+size = 1
+type = "uint8"
+endianness = "big"
+display_format = "decimal"
+value_map = { "1" = "32-bit", "2" = "64-bit" }
+
+[[format.fields]]
+section_name = "ELF Header"
+name = "Data Encoding"
+offset = 5
+size = 1
+type = "uint8"
+endianness = "big"
+display_format = "decimal"
+value_map = { "1" = "Little-endian", "2" = "Big-endian" }
+
+[[format.fields]]
+section_name = "ELF Header"
+name = "ELF Version"
+offset = 6
+size = 1
+type = "uint8"
+endianness = "big"
+display_format = "decimal"
+
+[[format.fields]]
+section_name = "ELF Header"
+name = "OS/ABI"
+offset = 7
+size = 1
+type = "uint8"
+endianness = "big"
+display_format = "decimal"
+value_map = { "0" = "System V", "1" = "HP-UX", "2" = "NetBSD", "3" = "Linux", "6" = "Solaris", "9" = "FreeBSD", "12" = "OpenBSD" }
+
+[[format.fields]]
+section_name = "ELF Header"
+name = "ABI Version"
+offset = 8
+size = 1
+type = "uint8"
+endianness = "big"
+display_format = "decimal"
+
+[[format.fields]]
+section_name = "ELF Header"
+name = "Padding"
+offset = 9
+size = 7
+type = "bytes"
+endianness = "big"
+display_format = "hex"
+
+[[format.fields]]
+section_name = "ELF Header"
+name = "Type"
+offset = 16
+size = 2
+type = "uint16"
+endianness = "little"
+display_format = "decimal"
+value_map = { "0" = "None", "1" = "Relocatable", "2" = "Executable", "3" = "Shared object", "4" = "Core" }
+
+[[format.fields]]
+section_name = "ELF Header"
+name = "Machine"
+offset = 18
+size = 2
+type = "uint16"
+endianness = "little"
+display_format = "decimal"
+value_map = { "3" = "x86", "8" = "MIPS", "20" = "PowerPC", "40" = "ARM", "62" = "x86-64", "183" = "AArch64", "243" = "RISC-V" }
+
+
+[[format]]
+id = 16
+name = "Windows PE/EXE"
+description = "Windows Portable Executable"
+category = "proprietary"
+magic_bytes = [0x4D, 0x5A]
+offset = 0
+priority = 8
+
+
+[[format]]
+id = 18
+name = "WebAssembly Binary"
+description = "WebAssembly binary module"
+category = "proprietary"
+magic_bytes = [0x00, 0x61, 0x73, 0x6D]
+offset = 0
+priority = 10
+
+
+[[format]]
+id = 19
+name = "SQLite"
+description = "SQLite database file"
+category = "proprietary"
+magic_bytes = [0x53, 0x51, 0x4C, 0x69, 0x74, 0x65]
+offset = 0
+priority = 10

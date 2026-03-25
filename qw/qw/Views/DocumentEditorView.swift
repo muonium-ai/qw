@@ -10,6 +10,7 @@ import UniformTypeIdentifiers
 
 #if os(macOS)
 import AppKit
+import QuickLookUI
 #endif
 
 /// The main document editor view
@@ -136,15 +137,28 @@ struct DocumentEditorView: View {
         .onChange(of: fileURL) { _, _ in
             updateFileType()
         }
-        .alert("Binary File Detected", isPresented: $showBinaryAlert) {
+        .confirmationDialog(
+            "This file appears to be binary. How would you like to open it?",
+            isPresented: $showBinaryAlert,
+            titleVisibility: .visible
+        ) {
             Button("Hex Mode") {
                 isHexMode = true
             }
-            Button("Text Mode", role: .cancel) {
+            Button("Text Mode") {
                 isHexMode = false
             }
-        } message: {
-            Text("This file appears to be binary. Open in hex mode?")
+            #if os(macOS)
+            if let url = fileURL {
+                Button("Preview (Quick Look)") {
+                    showQuickLookPreview(for: url)
+                }
+                Button("Open in Default App") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+            #endif
+            Button("Cancel", role: .cancel) { }
         }
         #if os(macOS)
         .toolbar {
@@ -217,6 +231,17 @@ struct DocumentEditorView: View {
         #endif
     
     #if os(macOS)
+    private func showQuickLookPreview(for url: URL) {
+        let panel = QLPreviewPanel.shared()!
+        let delegate = QuickLookCoordinator(url: url)
+        // Keep a strong reference via objc associated object so it lives while the panel is up
+        objc_setAssociatedObject(panel, "qlCoordinator", delegate, .OBJC_ASSOCIATION_RETAIN)
+        panel.dataSource = delegate
+        panel.delegate = delegate
+        panel.makeKeyAndOrderFront(nil)
+        panel.reloadData()
+    }
+
     private func openComparePanel() {
         guard isHexMode else {
             NSSound.beep()
@@ -454,6 +479,26 @@ extension View {
         }
     }
 }
+
+#if os(macOS)
+// MARK: - Quick Look Coordinator
+
+/// Serves as both data source and delegate for QLPreviewPanel to display a single file.
+private class QuickLookCoordinator: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDelegate {
+    let url: URL
+
+    init(url: URL) {
+        self.url = url
+        super.init()
+    }
+
+    func numberOfPreviewItems(in panel: QLPreviewPanel!) -> Int { 1 }
+
+    func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> (any QLPreviewItem)! {
+        url as NSURL
+    }
+}
+#endif
 
 #Preview {
     DocumentEditorView(

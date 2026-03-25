@@ -105,6 +105,45 @@ Features:
 
 ---
 
+### 4.6 Hex Editor
+
+View and edit binary files with a dedicated hex editing mode.
+
+#### Hex Viewing
+- Display file contents in canonical hex dump format: offset | hex bytes | ASCII
+- 16 bytes per row with configurable grouping (1, 2, 4, 8 bytes)
+- Offset gutter (hex address column)
+- ASCII sidebar showing printable characters (non-printable shown as `.`)
+- Alternating row backgrounds for readability
+- Syntax coloring by byte value (null bytes, printable ASCII, high bytes)
+- File size display and current cursor offset in status bar
+
+#### Hex Editing
+- Click to select a byte in hex or ASCII pane
+- Type hex digits to overwrite bytes in hex pane
+- Type characters to overwrite bytes in ASCII pane
+- Insert and delete bytes (with confirmation for size-changing edits)
+- Undo/redo support
+- Find & replace in hex (search by hex pattern or ASCII string)
+- Go-to-offset (decimal or hex)
+
+#### Mode Switching
+- Auto-detect binary files on open (presence of null bytes or non-UTF-8 sequences)
+- Manual toggle between text mode and hex mode via menu/shortcut (Cmd+Shift+H)
+- Prompt user when opening a binary file: "This file appears to be binary. Open in hex mode?"
+- Hex mode available for any file regardless of content
+
+#### Performance
+- Lazy loading / virtual scrolling for large binary files (up to 100 MB)
+- Memory-mapped I/O for files > 10 MB
+- Edits stored as a patch list — no full file copy in memory
+
+#### Export
+- Copy selection as hex string, C array, Swift byte array, or raw bytes
+- Export visible range or full file as hex dump text
+
+---
+
 ## 5. macOS-Native UX Principles
 - AppKit / SwiftUI hybrid
 - Native menu bar integration
@@ -167,6 +206,7 @@ Features:
 ## 11. Future Enhancements
 
 ### Phase 2
+- Hex editor (view & edit binary files)
 - Split view
 - Markdown preview
 - Command palette

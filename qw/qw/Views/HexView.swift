@@ -2,9 +2,9 @@
 //  HexView.swift
 //  qw
 //
-//  Read-only hex viewer that displays file contents in canonical hex dump format.
-//  Supports byte selection and copy/export in multiple formats.
-//  Ticket: T-000019, T-000023, T-000024
+//  Hex viewer and editor displaying file contents in canonical hex dump format.
+//  Supports byte selection, copy/export in multiple formats, and inline editing.
+//  Ticket: T-000019, T-000020, T-000023, T-000024
 //
 
 import SwiftUI
@@ -17,7 +17,7 @@ private struct HexRow: Identifiable {
     let bytes: Data.SubSequence
 }
 
-/// Read-only hex viewer displaying Data in canonical hex dump format.
+/// Hex viewer/editor displaying Data in canonical hex dump format.
 ///
 /// Layout per row:
 ///   `00000010  48 65 6c 6c 6f 20 57 6f  72 6c 64 21 0a 00 00 00  |Hello World!....|`
@@ -38,13 +38,36 @@ private struct HexRow: Identifiable {
 /// **Memory-mapped I/O**: use `HexView(url:)` to open large files with
 /// `Data(contentsOf:options:.mappedIfSafe)` so the OS pages in only the
 /// portions that are actually read.
+///
+/// **Two modes**:
+/// - **Read-only**: `HexView(data:)` or `HexView(url:)` — selection + copy only.
+/// - **Editable**: `HexView(hexDocument:)` — type hex digits to overwrite bytes,
+///   delete key removes byte, insert via toolbar/keyboard. Full undo/redo.
 struct HexView: View {
-    let data: Data
+
+    // MARK: - Stored properties
+
+    /// Read-only data — used when `hexDocument` is not provided.
+    private let readOnlyData: Data?
+
+    /// Editable document model — nil in read-only mode.
+    @ObservedObject private var hexDocumentStorage: HexDocument
+
+    /// Whether this view supports editing.
+    private let isEditable: Bool
 
     // MARK: - Selection state
 
     @State private var selectionStart: Int?
     @State private var selectionEnd: Int?
+
+    /// Whether the ASCII pane is the active input target (vs. the hex pane).
+    @State private var asciiInputMode: Bool = false
+
+    /// Accumulator for the first hex nibble when typing a two-digit hex value.
+    @State private var pendingNibble: UInt8?
+
+    @Environment(\.undoManager) private var environmentUndoManager
 
     /// The normalized (ordered) range of selected byte indices, if any.
     private var selectionRange: ClosedRange<Int>? {
@@ -54,45 +77,60 @@ struct HexView: View {
 
     /// The selected bytes as `Data`, if a selection exists.
     var selectedData: Data? {
-        guard let range = selectionRange, !data.isEmpty else { return nil }
-        let clamped = range.clamped(to: 0...(data.count - 1))
+        let d = displayData
+        guard let range = selectionRange, !d.isEmpty else { return nil }
+        let clamped = range.clamped(to: 0...(d.count - 1))
         guard !clamped.isEmpty else { return nil }
-        let dataStart = data.startIndex + clamped.lowerBound
-        let dataEnd = data.startIndex + clamped.upperBound + 1
-        return Data(data[dataStart..<dataEnd])
+        let dataStart = d.startIndex + clamped.lowerBound
+        let dataEnd = d.startIndex + clamped.upperBound + 1
+        return Data(d[dataStart..<dataEnd])
     }
 
-    // MARK: - Memory-mapped convenience initializer
+    // MARK: - Initializers
 
-    /// Opens a file with memory-mapped I/O (`mappedIfSafe`), suitable for
-    /// files up to hundreds of megabytes without loading everything into RAM.
-    /// Falls back to empty data if the file cannot be read.
+    /// Opens a file with memory-mapped I/O (`mappedIfSafe`). Read-only.
     init(url: URL) {
-        self.data = (try? Data(contentsOf: url, options: .mappedIfSafe)) ?? Data()
+        self.readOnlyData = (try? Data(contentsOf: url, options: .mappedIfSafe)) ?? Data()
+        self._hexDocumentStorage = ObservedObject(wrappedValue: HexDocument(data: Data()))
+        self.isEditable = false
     }
 
-    /// Standard initializer for in-memory data (small files, buffers, etc.).
+    /// Standard read-only initializer for in-memory data.
     init(data: Data) {
-        self.data = data
+        self.readOnlyData = data
+        self._hexDocumentStorage = ObservedObject(wrappedValue: HexDocument(data: Data()))
+        self.isEditable = false
+    }
+
+    /// Editable initializer — full editing support with undo/redo.
+    init(hexDocument: HexDocument) {
+        self.readOnlyData = nil
+        self._hexDocumentStorage = ObservedObject(wrappedValue: hexDocument)
+        self.isEditable = true
     }
 
     // MARK: - Computed
 
-    /// Total number of 16-byte rows needed to display `data`.
-    private var rowCount: Int {
-        max((data.count + 15) / 16, 0)
+    /// The data to display.
+    private var displayData: Data {
+        isEditable ? hexDocumentStorage.currentData : (readOnlyData ?? Data())
     }
 
-    /// Build a single `HexRow` on demand from the backing data.
-    /// Only the 16-byte slice for this row is touched.
+    /// Total number of 16-byte rows needed to display the data.
+    private var rowCount: Int {
+        max((displayData.count + 15) / 16, 0)
+    }
+
+    /// Build a single `HexRow` on demand.
     private func row(at index: Int) -> HexRow {
-        let start = data.startIndex + index * 16
-        let end = min(start + 16, data.endIndex)
-        return HexRow(id: index, offset: index * 16, bytes: data[start..<end])
+        let d = displayData
+        let start = d.startIndex + index * 16
+        let end = min(start + 16, d.endIndex)
+        return HexRow(id: index, offset: index * 16, bytes: d[start..<end])
     }
 
     private var fileSizeDescription: String {
-        let count = data.count
+        let count = displayData.count
         if count == 0 {
             return "0 bytes"
         } else if count == 1 {
@@ -109,6 +147,14 @@ struct HexView: View {
     private var selectionDescription: String? {
         guard let range = selectionRange else { return nil }
         let count = range.count
+        if isEditable && count == 1 {
+            let idx = range.lowerBound
+            let d = displayData
+            if idx < d.count {
+                let byte = d[d.startIndex + idx]
+                return String(format: "Offset: 0x%X  Value: 0x%02X (%d)", idx, byte, byte)
+            }
+        }
         let label = count == 1 ? "1 byte" : "\(count) bytes"
         return "Selection: \(String(format: "0x%X", range.lowerBound))\u{2013}\(String(format: "0x%X", range.upperBound)) (\(label))"
     }
@@ -117,7 +163,7 @@ struct HexView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if data.isEmpty {
+            if displayData.isEmpty {
                 emptyView
             } else {
                 hexContent
@@ -132,6 +178,16 @@ struct HexView: View {
             return [item]
         }
         #endif
+        .onAppear {
+            if isEditable {
+                hexDocumentStorage.undoManager = environmentUndoManager
+            }
+        }
+        .onChange(of: environmentUndoManager) { _, newValue in
+            if isEditable {
+                hexDocumentStorage.undoManager = newValue
+            }
+        }
     }
 
     // MARK: - Subviews
@@ -142,6 +198,14 @@ struct HexView: View {
             Text("Empty file")
                 .font(.system(.body, design: .monospaced))
                 .foregroundStyle(.secondary)
+            if isEditable {
+                Button("Insert Byte") {
+                    hexDocumentStorage.insertByte(0x00, at: 0)
+                    selectionStart = 0
+                    selectionEnd = 0
+                }
+                .padding(.top, 8)
+            }
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -161,6 +225,7 @@ struct HexView: View {
             }
         }
         .contextMenu { copyContextMenu }
+        .background(keyboardHandler)
     }
 
     private var statusBar: some View {
@@ -175,7 +240,32 @@ struct HexView: View {
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(.secondary)
             }
+            if isEditable && hexDocumentStorage.isModified {
+                Text("  |  ")
+                    .foregroundStyle(.secondary)
+                Text("Modified")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.orange)
+            }
             Spacer()
+            if isEditable, let range = selectionRange, range.count == 1 {
+                let idx = range.lowerBound
+                Button {
+                    hexDocumentStorage.insertByte(0x00, at: idx)
+                } label: {
+                    Image(systemName: "plus.square")
+                }
+                .help("Insert 0x00 byte at cursor")
+                .buttonStyle(.borderless)
+
+                Button {
+                    performDeleteByte(at: idx)
+                } label: {
+                    Image(systemName: "minus.square")
+                }
+                .help("Delete byte at cursor")
+                .buttonStyle(.borderless)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
@@ -213,12 +303,13 @@ struct HexView: View {
         }
         Button("Select All") {
             selectionStart = 0
-            selectionEnd = data.count - 1
+            selectionEnd = displayData.count - 1
         }
-        .disabled(data.isEmpty)
+        .disabled(displayData.isEmpty)
         Button("Clear Selection") {
             selectionStart = nil
             selectionEnd = nil
+            pendingNibble = nil
         }
         .disabled(selectionStart == nil)
     }
@@ -272,34 +363,44 @@ struct HexView: View {
     }
 
     /// A single hex byte cell that supports click-to-select and shift-click-to-extend.
+    /// In edit mode, the cursor byte has an opaque accent highlight.
     private func hexByteView(byte: UInt8, absoluteIndex: Int) -> some View {
-        Text(String(format: "%02x ", byte))
-            .foregroundStyle(byteColor(byte))
-            .background(isSelected(absoluteIndex) ? selectionHighlight : Color.clear)
+        let isCursor = isEditable && isCursorByte(absoluteIndex) && !asciiInputMode
+        let isInSelection = isSelected(absoluteIndex) && !isCursor
+
+        return Text(String(format: "%02x ", byte))
+            .foregroundStyle(isCursor ? Color.white : byteColor(byte))
+            .background(isCursor ? Color.accentColor.opacity(0.8) : (isInSelection ? selectionHighlight : Color.clear))
+            .contentShape(Rectangle())
             .onTapGesture {
-                handleByteTap(absoluteIndex, extend: false)
+                handleByteTap(absoluteIndex, extend: false, ascii: false)
             }
             #if os(macOS)
             .simultaneousGesture(
                 TapGesture().modifiers(.shift).onEnded {
-                    handleByteTap(absoluteIndex, extend: true)
+                    handleByteTap(absoluteIndex, extend: true, ascii: false)
                 }
             )
             #endif
     }
 
     /// A single ASCII byte cell that mirrors selection highlighting.
+    /// In edit mode with ASCII input, the cursor byte has an opaque accent highlight.
     private func asciiByteView(byte: UInt8, absoluteIndex: Int) -> some View {
-        Text(asciiCharacter(byte))
-            .foregroundStyle(byteColor(byte))
-            .background(isSelected(absoluteIndex) ? selectionHighlight : Color.clear)
+        let isCursor = isEditable && isCursorByte(absoluteIndex) && asciiInputMode
+        let isInSelection = isSelected(absoluteIndex) && !isCursor
+
+        return Text(asciiCharacter(byte))
+            .foregroundStyle(isCursor ? Color.white : byteColor(byte))
+            .background(isCursor ? Color.accentColor.opacity(0.8) : (isInSelection ? selectionHighlight : Color.clear))
+            .contentShape(Rectangle())
             .onTapGesture {
-                handleByteTap(absoluteIndex, extend: false)
+                handleByteTap(absoluteIndex, extend: false, ascii: true)
             }
             #if os(macOS)
             .simultaneousGesture(
                 TapGesture().modifiers(.shift).onEnded {
-                    handleByteTap(absoluteIndex, extend: true)
+                    handleByteTap(absoluteIndex, extend: true, ascii: true)
                 }
             )
             #endif
@@ -307,24 +408,163 @@ struct HexView: View {
 
     // MARK: - Selection logic
 
+    /// Whether this byte index is the single-byte cursor (for editing).
+    private func isCursorByte(_ index: Int) -> Bool {
+        guard let range = selectionRange else { return false }
+        return range.count == 1 && range.lowerBound == index
+    }
+
     private func isSelected(_ index: Int) -> Bool {
         guard let range = selectionRange else { return false }
         return range.contains(index)
     }
 
-    private func handleByteTap(_ index: Int, extend: Bool) {
+    private func handleByteTap(_ index: Int, extend: Bool, ascii: Bool) {
         if extend, selectionStart != nil {
-            // Extend selection from the anchor (selectionStart) to the clicked byte
             selectionEnd = index
         } else {
-            // New selection — single byte
             selectionStart = index
             selectionEnd = index
+        }
+        pendingNibble = nil
+        if isEditable {
+            asciiInputMode = ascii
         }
     }
 
     private var selectionHighlight: Color {
         Color.accentColor.opacity(0.3)
+    }
+
+    // MARK: - Keyboard handling (edit mode)
+
+    @ViewBuilder
+    private var keyboardHandler: some View {
+        if isEditable {
+            #if os(macOS)
+            HexKeyboardResponder(
+                onHexDigit: { digit in handleHexDigit(digit) },
+                onASCIIChar: { char in handleASCIIChar(char) },
+                onDelete: { handleDelete() },
+                onArrow: { direction in handleArrow(direction) },
+                onEscape: {
+                    selectionStart = nil
+                    selectionEnd = nil
+                    pendingNibble = nil
+                },
+                isASCIIMode: asciiInputMode
+            )
+            .frame(width: 0, height: 0)
+            #else
+            EmptyView()
+            #endif
+        } else {
+            EmptyView()
+        }
+    }
+
+    // MARK: - Edit input handling
+
+    /// Process a hex digit (0-15) typed in the hex pane.
+    private func handleHexDigit(_ digit: UInt8) {
+        guard !asciiInputMode else { return }
+        guard let range = selectionRange, range.count == 1 else { return }
+        let idx = range.lowerBound
+        guard idx < displayData.count else { return }
+
+        if let high = pendingNibble {
+            let newByte = (high << 4) | digit
+            hexDocumentStorage.overwriteByte(at: idx, with: newByte)
+            pendingNibble = nil
+            advanceCursor()
+        } else {
+            pendingNibble = digit
+        }
+    }
+
+    /// Process a printable ASCII character typed in the ASCII pane.
+    private func handleASCIIChar(_ char: Character) {
+        guard asciiInputMode else { return }
+        guard let range = selectionRange, range.count == 1 else { return }
+        let idx = range.lowerBound
+        guard idx < displayData.count else { return }
+        guard let ascii = char.asciiValue else { return }
+
+        hexDocumentStorage.overwriteByte(at: idx, with: ascii)
+        advanceCursor()
+    }
+
+    /// Delete the byte at the current cursor position.
+    private func handleDelete() {
+        guard let range = selectionRange, range.count == 1 else { return }
+        performDeleteByte(at: range.lowerBound)
+    }
+
+    private func performDeleteByte(at idx: Int) {
+        guard idx < displayData.count else { return }
+        hexDocumentStorage.deleteByte(at: idx)
+        let d = displayData
+        if d.isEmpty {
+            selectionStart = nil
+            selectionEnd = nil
+        } else if idx >= d.count {
+            selectionStart = d.count - 1
+            selectionEnd = d.count - 1
+        }
+        pendingNibble = nil
+    }
+
+    /// Move the cursor to the next byte.
+    private func advanceCursor() {
+        guard let s = selectionStart else { return }
+        let next = s + 1
+        if next < displayData.count {
+            selectionStart = next
+            selectionEnd = next
+        }
+    }
+
+    /// Handle arrow key navigation.
+    private func handleArrow(_ direction: ArrowDirection) {
+        let d = displayData
+        guard let range = selectionRange else {
+            if !d.isEmpty {
+                selectionStart = 0
+                selectionEnd = 0
+            }
+            return
+        }
+        pendingNibble = nil
+
+        // Use lowerBound for single cursor navigation
+        let idx = range.lowerBound
+
+        switch direction {
+        case .left:
+            if idx > 0 {
+                selectionStart = idx - 1
+                selectionEnd = idx - 1
+            }
+        case .right:
+            if idx < d.count - 1 {
+                selectionStart = idx + 1
+                selectionEnd = idx + 1
+            }
+        case .up:
+            if idx >= 16 {
+                selectionStart = idx - 16
+                selectionEnd = idx - 16
+            }
+        case .down:
+            let next = idx + 16
+            if next < d.count {
+                selectionStart = next
+                selectionEnd = next
+            } else if d.count > 0 {
+                selectionStart = d.count - 1
+                selectionEnd = d.count - 1
+            }
+        }
     }
 
     // MARK: - Helpers
@@ -367,12 +607,156 @@ struct HexView: View {
     }
 }
 
-// MARK: - Preview
+// MARK: - Arrow direction
 
-#Preview("Hex View — sample data") {
+enum ArrowDirection {
+    case left, right, up, down
+}
+
+// MARK: - macOS keyboard responder
+
+#if os(macOS)
+import AppKit
+
+/// An NSView-backed responder that captures key events for the hex editor.
+///
+/// Placed as an invisible background view. When the hex content area is clicked,
+/// the responder becomes first responder to receive key-down events.
+struct HexKeyboardResponder: NSViewRepresentable {
+    let onHexDigit: (UInt8) -> Void
+    let onASCIIChar: (Character) -> Void
+    let onDelete: () -> Void
+    let onArrow: (ArrowDirection) -> Void
+    let onEscape: () -> Void
+    let isASCIIMode: Bool
+
+    func makeNSView(context: Context) -> HexKeyView {
+        let view = HexKeyView()
+        view.onHexDigit = onHexDigit
+        view.onASCIIChar = onASCIIChar
+        view.onDelete = onDelete
+        view.onArrow = onArrow
+        view.onEscape = onEscape
+        view.isASCIIMode = isASCIIMode
+        DispatchQueue.main.async {
+            view.window?.makeFirstResponder(view)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: HexKeyView, context: Context) {
+        nsView.onHexDigit = onHexDigit
+        nsView.onASCIIChar = onASCIIChar
+        nsView.onDelete = onDelete
+        nsView.onArrow = onArrow
+        nsView.onEscape = onEscape
+        nsView.isASCIIMode = isASCIIMode
+    }
+}
+
+/// NSView subclass that can become first responder and handle keyDown events.
+class HexKeyView: NSView {
+    var onHexDigit: ((UInt8) -> Void)?
+    var onASCIIChar: ((Character) -> Void)?
+    var onDelete: (() -> Void)?
+    var onArrow: ((ArrowDirection) -> Void)?
+    var onEscape: (() -> Void)?
+    var isASCIIMode: Bool = false
+
+    override var acceptsFirstResponder: Bool { true }
+
+    override func keyDown(with event: NSEvent) {
+        guard let chars = event.charactersIgnoringModifiers, let char = chars.first else {
+            super.keyDown(with: event)
+            return
+        }
+
+        // Let Cmd-key combos pass through (undo/redo, copy, save, etc.)
+        if event.modifierFlags.contains(.command) {
+            super.keyDown(with: event)
+            return
+        }
+
+        // Arrow keys
+        switch event.keyCode {
+        case 123: onArrow?(.left); return
+        case 124: onArrow?(.right); return
+        case 125: onArrow?(.down); return
+        case 126: onArrow?(.up); return
+        default: break
+        }
+
+        // Escape
+        if event.keyCode == 53 {
+            onEscape?()
+            return
+        }
+
+        // Delete (backspace)
+        if event.keyCode == 51 || char == Character(UnicodeScalar(0x7F)) {
+            onDelete?()
+            return
+        }
+
+        // Forward delete
+        if event.keyCode == 117 {
+            onDelete?()
+            return
+        }
+
+        if isASCIIMode {
+            if let av = char.asciiValue, av >= 0x20, av <= 0x7E {
+                onASCIIChar?(char)
+            }
+        } else {
+            if let nibble = hexValue(of: char) {
+                onHexDigit?(nibble)
+            }
+        }
+    }
+
+    private func hexValue(of char: Character) -> UInt8? {
+        switch char {
+        case "0": return 0
+        case "1": return 1
+        case "2": return 2
+        case "3": return 3
+        case "4": return 4
+        case "5": return 5
+        case "6": return 6
+        case "7": return 7
+        case "8": return 8
+        case "9": return 9
+        case "a", "A": return 10
+        case "b", "B": return 11
+        case "c", "C": return 12
+        case "d", "D": return 13
+        case "e", "E": return 14
+        case "f", "F": return 15
+        default: return nil
+        }
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.modifierFlags.contains(.command) {
+            return super.performKeyEquivalent(with: event)
+        }
+        return false
+    }
+}
+#endif
+
+// MARK: - Previews
+
+#Preview("Hex View — read-only") {
     HexView(data: "Hello, World! This is a hex viewer test with enough text to span multiple rows.\n\0\u{80}\u{FF}".data(using: .utf8)!)
 }
 
 #Preview("Hex View — empty") {
     HexView(data: Data())
+}
+
+#Preview("Hex View — editable") {
+    let doc = HexDocument(data: "Hello, World! Editable hex editor test.\n\0\u{80}\u{FF}".data(using: .utf8)!)
+    HexView(hexDocument: doc)
 }

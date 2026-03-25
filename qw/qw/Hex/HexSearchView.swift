@@ -14,12 +14,10 @@ struct HexSearchView: View {
     let data: Data
     let hexDocument: HexDocument?
 
+    @Environment(\.colorScheme) private var colorScheme
+
     private var backgroundColor: Color {
-        #if os(macOS)
-        Color(nsColor: .controlBackgroundColor)
-        #else
-        Color(uiColor: .secondarySystemBackground)
-        #endif
+        EditorSettingsManager.shared.syntaxTheme(for: colorScheme).background
     }
 
     var body: some View {

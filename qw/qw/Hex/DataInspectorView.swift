@@ -16,6 +16,12 @@ struct DataInspectorView: View {
     let cursorOffset: Int?
     @Binding var isLittleEndian: Bool
 
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var theme: SyntaxTheme {
+        EditorSettingsManager.shared.syntaxTheme(for: colorScheme)
+    }
+
     /// Up to 8 bytes starting at `cursorOffset`.
     private var slice: Data {
         guard let offset = cursorOffset, offset >= 0, offset < data.count else {
@@ -72,11 +78,7 @@ struct DataInspectorView: View {
             }
         }
         .frame(width: 220)
-        #if os(macOS)
-        .background(Color(nsColor: .controlBackgroundColor))
-        #else
-        .background(Color(uiColor: .secondarySystemBackground))
-        #endif
+        .background(theme.background)
     }
 
     // MARK: - Header

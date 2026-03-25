@@ -86,6 +86,13 @@ struct HexView: View {
     @State private var showDataInspector: Bool = true
     @State private var isLittleEndian: Bool = true
 
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// Current editor theme, derived from user settings and system color scheme.
+    private var theme: SyntaxTheme {
+        EditorSettingsManager.shared.syntaxTheme(for: colorScheme)
+    }
+
     // MARK: - Annotation state
 
     @State private var showAnnotationPanel: Bool = false
@@ -333,7 +340,7 @@ struct HexView: View {
             Spacer()
             Text("Empty file")
                 .font(.system(.body, design: .monospaced))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(theme.comment)
             if isEditable {
                 Button("Insert Byte") {
                     hexDocumentStorage.insertByte(0x00, at: 0)
@@ -345,6 +352,7 @@ struct HexView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(theme.background)
     }
 
     private var hexContent: some View {
@@ -379,6 +387,7 @@ struct HexView: View {
             }
             .contextMenu { copyContextMenu }
             .background(keyboardHandler)
+            .background(theme.background)
         }
     }
 
@@ -435,13 +444,7 @@ struct HexView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background {
-            #if os(macOS)
-            Color(nsColor: .windowBackgroundColor)
-            #else
-            Color(uiColor: .secondarySystemBackground)
-            #endif
-        }
+        .background(theme.background)
     }
 
     // MARK: - Section legend
@@ -478,13 +481,7 @@ struct HexView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
-        .background {
-            #if os(macOS)
-            Color(nsColor: .windowBackgroundColor)
-            #else
-            Color(uiColor: .secondarySystemBackground)
-            #endif
-        }
+        .background(theme.background)
     }
 
     // MARK: - Context menu
@@ -529,7 +526,7 @@ struct HexView: View {
         HStack(spacing: 0) {
             // Offset gutter
             Text(String(format: "%08x", row.offset))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(theme.lineNumber)
 
             Text("  ")
 
@@ -560,13 +557,13 @@ struct HexView: View {
 
             // ASCII sidebar
             Text("|")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(theme.lineNumber)
             ForEach(0..<row.bytes.count, id: \.self) { i in
                 let byte = row.bytes[row.bytes.startIndex + i]
                 asciiByteView(byte: byte, absoluteIndex: row.offset + i)
             }
             Text("|")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(theme.lineNumber)
         }
         .font(.system(.body, design: .monospaced))
     }
@@ -579,14 +576,14 @@ struct HexView: View {
         let isInSelection = isSelected(absoluteIndex) && !isCursor
         let matchHighlight = searchMatchHighlight(for: absoluteIndex)
         let sectionBg = sectionBackground(for: absoluteIndex)
-        let fgHighlight: Color = isCursor ? Color.accentColor.opacity(0.8)
+        let fgHighlight: Color = isCursor ? theme.selection
             : (isInSelection ? selectionHighlight
             : (matchHighlight != Color.clear ? matchHighlight : .clear))
 
         let tooltip = annotationTooltip(for: absoluteIndex) ?? sectionTooltip(for: absoluteIndex)
 
         return Text(String(format: "%02x ", byte))
-            .foregroundStyle(isCursor ? Color.white : byteColor(byte))
+            .foregroundStyle(isCursor ? theme.background : byteColor(byte))
             .background(
                 ZStack {
                     sectionBg
@@ -615,14 +612,14 @@ struct HexView: View {
         let isInSelection = isSelected(absoluteIndex) && !isCursor
         let matchHighlight = searchMatchHighlight(for: absoluteIndex)
         let sectionBg = sectionBackground(for: absoluteIndex)
-        let fgHighlight: Color = isCursor ? Color.accentColor.opacity(0.8)
+        let fgHighlight: Color = isCursor ? theme.selection
             : (isInSelection ? selectionHighlight
             : (matchHighlight != Color.clear ? matchHighlight : .clear))
 
         let tooltip = annotationTooltip(for: absoluteIndex) ?? sectionTooltip(for: absoluteIndex)
 
         return Text(asciiCharacter(byte))
-            .foregroundStyle(isCursor ? Color.white : byteColor(byte))
+            .foregroundStyle(isCursor ? theme.background : byteColor(byte))
             .background(
                 ZStack {
                     sectionBg
@@ -670,7 +667,7 @@ struct HexView: View {
     }
 
     private var selectionHighlight: Color {
-        Color.accentColor.opacity(0.3)
+        theme.selection
     }
 
     /// Returns a highlight color if the byte at `index` falls within a search match.
@@ -682,8 +679,8 @@ struct HexView: View {
         for (i, match) in hexSearchState.matches.enumerated() {
             if match.contains(index) {
                 return i == hexSearchState.currentMatchIndex
-                    ? Color.orange.opacity(0.6)
-                    : Color.yellow.opacity(0.35)
+                    ? theme.string.opacity(0.6)
+                    : theme.number.opacity(0.3)
             }
         }
         return Color.clear
@@ -837,26 +834,18 @@ struct HexView: View {
     /// - Other non-printable: secondary
     private func byteColor(_ byte: UInt8) -> Color {
         if byte == 0x00 {
-            return .secondary.opacity(0.5)
+            return theme.comment.opacity(0.5)
         } else if byte > 0x7F {
-            return .accentColor
+            return theme.keyword
         } else if byte >= 0x20 && byte <= 0x7E {
-            #if os(macOS)
-            return Color(nsColor: .labelColor)
-            #else
-            return Color(uiColor: .label)
-            #endif
+            return theme.plain
         } else {
-            return .secondary
+            return theme.punctuation
         }
     }
 
     private var alternateRowBackground: Color {
-        #if os(macOS)
-        Color(nsColor: .controlBackgroundColor).opacity(0.5)
-        #else
-        Color(uiColor: .secondarySystemBackground).opacity(0.5)
-        #endif
+        theme.lineNumber.opacity(0.08)
     }
 }
 

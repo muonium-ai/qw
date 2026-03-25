@@ -14,6 +14,12 @@ struct AnnotationPanelView: View {
 
     let annotations: [FieldValue]
 
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var theme: SyntaxTheme {
+        EditorSettingsManager.shared.syntaxTheme(for: colorScheme)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
@@ -25,11 +31,7 @@ struct AnnotationPanelView: View {
             }
         }
         .frame(width: 320)
-        #if os(macOS)
-        .background(Color(nsColor: .controlBackgroundColor))
-        #else
-        .background(Color(uiColor: .secondarySystemBackground))
-        #endif
+        .background(theme.background)
     }
 
     // MARK: - Header

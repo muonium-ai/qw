@@ -18,12 +18,10 @@ struct GoToOffsetView: View {
     @State private var offsetText: String = ""
     @State private var errorMessage: String?
 
+    @Environment(\.colorScheme) private var colorScheme
+
     private var backgroundColor: Color {
-        #if os(macOS)
-        Color(nsColor: .controlBackgroundColor)
-        #else
-        Color(uiColor: .secondarySystemBackground)
-        #endif
+        EditorSettingsManager.shared.syntaxTheme(for: colorScheme).background
     }
 
     var body: some View {

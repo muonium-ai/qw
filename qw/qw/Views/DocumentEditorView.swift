@@ -25,6 +25,11 @@ struct DocumentEditorView: View {
     @State private var showBinaryAlert: Bool = false
     @StateObject private var searchState = SearchState()
 
+    // Binary diff comparison state
+    @State private var isComparing: Bool = false
+    @State private var comparisonData: Data?
+    @State private var comparisonName: String = ""
+
     var body: some View {
         VStack(spacing: 0) {
             // Search/Replace bar (hidden in hex mode)
@@ -59,7 +64,34 @@ struct DocumentEditorView: View {
             }
 
             // Editor or Hex View
-            if isHexMode {
+            if isHexMode && isComparing, let compData = comparisonData {
+                VStack(spacing: 0) {
+                    HStack {
+                        Spacer()
+                        Button("Close Comparison") {
+                            isComparing = false
+                            comparisonData = nil
+                            comparisonName = ""
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 4)
+                    }
+                    .background {
+                        #if os(macOS)
+                        Color(nsColor: .windowBackgroundColor)
+                        #else
+                        Color(uiColor: .secondarySystemBackground)
+                        #endif
+                    }
+                    HexDiffView(
+                        dataA: document.rawData,
+                        dataB: compData,
+                        nameA: fileURL?.lastPathComponent ?? "Current File",
+                        nameB: comparisonName
+                    )
+                }
+                .accessibilityIdentifier("hexDiffViewer")
+            } else if isHexMode {
                 HexView(data: document.rawData)
                     .accessibilityIdentifier("hexViewer")
             } else {
@@ -136,6 +168,7 @@ struct DocumentEditorView: View {
         .focusedSceneValue(\.isReadOnly, isReadOnly)
         .focusedSceneValue(\.toggleHexModeAction, { isHexMode.toggle() })
         .focusedSceneValue(\.isHexMode, isHexMode)
+        .focusedSceneValue(\.hexCompareAction, { openComparePanel() })
         #endif
     }
 
@@ -182,6 +215,39 @@ struct DocumentEditorView: View {
         }
         #endif
     
+    #if os(macOS)
+    private func openComparePanel() {
+        guard isHexMode else {
+            NSSound.beep()
+            return
+        }
+        let openPanel = NSOpenPanel()
+        openPanel.allowsMultipleSelection = false
+        openPanel.canChooseDirectories = false
+        openPanel.canChooseFiles = true
+        openPanel.message = "Select a file to compare with"
+        openPanel.prompt = "Compare"
+
+        openPanel.begin { response in
+            if response == .OK, let url = openPanel.url {
+                do {
+                    let data = try Data(contentsOf: url, options: .mappedIfSafe)
+                    comparisonData = data
+                    comparisonName = url.lastPathComponent
+                    isComparing = true
+                } catch {
+                    let alert = NSAlert()
+                    alert.messageText = "Compare Error"
+                    alert.informativeText = "Failed to read file: \(error.localizedDescription)"
+                    alert.alertStyle = .warning
+                    alert.addButton(withTitle: "OK")
+                    alert.runModal()
+                }
+            }
+        }
+    }
+    #endif
+
     private func updateFileType() {
         if let url = fileURL {
             fileType = SupportedFileType.from(url: url)
@@ -310,6 +376,10 @@ struct IsHexModeFocusKey: FocusedValueKey {
     typealias Value = Bool
 }
 
+struct HexCompareActionFocusKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
 extension FocusedValues {
     var searchState: SearchState? {
         get { self[SearchStateFocusKey.self] }
@@ -354,6 +424,11 @@ extension FocusedValues {
     var isHexMode: Bool? {
         get { self[IsHexModeFocusKey.self] }
         set { self[IsHexModeFocusKey.self] = newValue }
+    }
+
+    var hexCompareAction: (() -> Void)? {
+        get { self[HexCompareActionFocusKey.self] }
+        set { self[HexCompareActionFocusKey.self] = newValue }
     }
 }
 

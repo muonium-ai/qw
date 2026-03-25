@@ -93,6 +93,7 @@ struct qwApp: App {
     @FocusedValue(\.isReadOnly) private var isReadOnly
     @FocusedValue(\.toggleHexModeAction) private var toggleHexModeAction
     @FocusedValue(\.isHexMode) private var isHexMode
+    @FocusedValue(\.hexCompareAction) private var hexCompareAction
     
     #if os(macOS)
     @NSApplicationDelegateAdaptor(QWAppDelegate.self) var appDelegate
@@ -244,6 +245,18 @@ struct qwApp: App {
                     toggleHexModeAction?()
                 }
                 .keyboardShortcut("h", modifiers: [.command, .shift])
+
+                Divider()
+
+                Button("Compare With...") {
+                    if let action = hexCompareAction {
+                        action()
+                    } else {
+                        NSSound.beep()
+                    }
+                }
+                .keyboardShortcut("d", modifiers: [.command, .shift])
+                .disabled(isHexMode != true)
             }
         }
         #endif

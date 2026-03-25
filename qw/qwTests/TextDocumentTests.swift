@@ -102,9 +102,14 @@ final class TextDocumentTests: XCTestCase {
         XCTAssertTrue(types.contains(.json))
         XCTAssertTrue(types.contains(.yaml))
         XCTAssertTrue(types.contains(.html))
+        XCTAssertTrue(types.contains(.xml))
         XCTAssertTrue(types.contains(.javaScript))
         XCTAssertTrue(types.contains(.pythonScript))
         XCTAssertTrue(types.contains(.swiftSource))
+        XCTAssertTrue(types.contains(.sourceCode))
+        XCTAssertTrue(types.contains(.shellScript))
+        // .item should no longer be in the list
+        XCTAssertFalse(types.contains(.item))
     }
     
     func testWritableContentTypes() {

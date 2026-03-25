@@ -50,7 +50,20 @@ struct TextDocument: FileDocument {
     var fileType: SupportedFileType
     
     static var readableContentTypes: [UTType] {
-        [.item]
+        [
+            .plainText,
+            .json,
+            .yaml,
+            .html,
+            .xml,
+            .javaScript,
+            .pythonScript,
+            .swiftSource,
+            .sourceCode,
+            .shellScript,
+            UTType(filenameExtension: "md") ?? .plainText,
+            UTType(filenameExtension: "css") ?? .plainText,
+        ]
     }
     
     static var writableContentTypes: [UTType] {

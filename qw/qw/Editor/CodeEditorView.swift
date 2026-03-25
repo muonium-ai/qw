@@ -457,22 +457,25 @@ struct MacOSTextEditor: NSViewRepresentable {
         
         if context.coordinator.fileType != fileType {
             context.coordinator.fileType = fileType
+            context.coordinator.cachedHighlighter = nil
             needsHighlight = true
         }
 
         if context.coordinator.fileName != fileName {
             context.coordinator.fileName = fileName
+            context.coordinator.cachedHighlighter = nil
             needsHighlight = true
         }
-        
+
         if context.coordinator.themeName != themeName {
             context.coordinator.themeName = themeName
             context.coordinator.theme = theme
+            context.coordinator.cachedHighlighter = nil
             needsHighlight = true
         } else {
             context.coordinator.theme = theme
         }
-        
+
         // Update read-only state
         if context.coordinator.isReadOnly != isReadOnly {
             context.coordinator.isReadOnly = isReadOnly
@@ -525,7 +528,8 @@ struct MacOSTextEditor: NSViewRepresentable {
         var isReadOnly: Bool
         private var isUpdating = false
         private var lastReadOnlyAlertTime: Date = .distantPast
-        
+        var cachedHighlighter: SyntaxHighlighter?
+
         init(_ parent: MacOSTextEditor) {
             self.parent = parent
             self.fileType = parent.fileType
@@ -616,14 +620,14 @@ struct MacOSTextEditor: NSViewRepresentable {
             let selectedRange = textView.selectedRange()
             let cursorPosition = selectedRange.location
             
-            // Calculate line and column
+            // Convert UTF-16 offset to String.Index (NSRange uses UTF-16 offsets)
+            let stringIndex = String.Index(utf16Offset: cursorPosition, in: text)
+
+            // Calculate line and column by iterating over the substring up to the cursor
             var line = 1
             var column = 1
-            
-            for (index, char) in text.enumerated() {
-                if index >= cursorPosition {
-                    break
-                }
+
+            for char in text[text.startIndex..<stringIndex] {
                 if char == "\n" {
                     line += 1
                     column = 1
@@ -631,9 +635,9 @@ struct MacOSTextEditor: NSViewRepresentable {
                     column += 1
                 }
             }
-            
-            // Handle cursor at end of text
-            if cursorPosition == text.count && text.last == "\n" {
+
+            // Handle cursor at end of text after a newline
+            if stringIndex == text.endIndex && text.last == "\n" {
                 line += 1
                 column = 1
             }
@@ -663,8 +667,14 @@ struct MacOSTextEditor: NSViewRepresentable {
                 return
             }
             
-            let highlighter = SyntaxHighlighter(fileType: fileType, theme: theme, fileName: fileName)
-            
+            let highlighter: SyntaxHighlighter
+            if let cached = cachedHighlighter {
+                highlighter = cached
+            } else {
+                highlighter = SyntaxHighlighter(fileType: fileType, theme: theme, fileName: fileName)
+                cachedHighlighter = highlighter
+            }
+
             // Store selection
             let selectedRanges = textView.selectedRanges
             
@@ -806,22 +816,25 @@ struct iOSTextEditor: UIViewRepresentable {
         
         if context.coordinator.fileType != fileType {
             context.coordinator.fileType = fileType
+            context.coordinator.cachedHighlighter = nil
             needsHighlight = true
         }
 
         if context.coordinator.fileName != fileName {
             context.coordinator.fileName = fileName
+            context.coordinator.cachedHighlighter = nil
             needsHighlight = true
         }
-        
+
         if context.coordinator.themeName != themeName {
             context.coordinator.themeName = themeName
             context.coordinator.theme = theme
+            context.coordinator.cachedHighlighter = nil
             needsHighlight = true
         } else {
             context.coordinator.theme = theme
         }
-        
+
         if needsHighlight {
             context.coordinator.applySyntaxHighlighting(to: textView)
         }
@@ -852,7 +865,8 @@ struct iOSTextEditor: UIViewRepresentable {
         var lineHeightMultiple: Double
         var isReadOnly: Bool
         private var isUpdating = false
-        
+        var cachedHighlighter: SyntaxHighlighter?
+
         init(_ parent: iOSTextEditor) {
             self.parent = parent
             self.fileType = parent.fileType
@@ -912,8 +926,14 @@ struct iOSTextEditor: UIViewRepresentable {
                 return
             }
             
-            let highlighter = SyntaxHighlighter(fileType: fileType, theme: theme, fileName: fileName)
-            
+            let highlighter: SyntaxHighlighter
+            if let cached = cachedHighlighter {
+                highlighter = cached
+            } else {
+                highlighter = SyntaxHighlighter(fileType: fileType, theme: theme, fileName: fileName)
+                cachedHighlighter = highlighter
+            }
+
             let selectedRange = textView.selectedRange
             
             let paragraphStyle = parent.paragraphStyle(for: currentFont)

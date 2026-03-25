@@ -24,8 +24,8 @@ struct SearchReplaceView: View {
     let onReplace: () -> Void
     let onReplaceAll: () -> Void
     
-    @State private var matchCount: Int = 0
-    @State private var currentMatch: Int = 0
+    let matchCount: Int
+    let currentMatchIndex: Int
     
     private var backgroundColor: Color {
         #if os(macOS)
@@ -52,7 +52,7 @@ struct SearchReplaceView: View {
                     #endif
                 
                 if !searchText.isEmpty {
-                    Text("\(currentMatch)/\(matchCount)")
+                    Text("\(matchCount > 0 ? currentMatchIndex + 1 : 0)/\(matchCount)")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .frame(minWidth: 40)
@@ -120,10 +120,6 @@ struct SearchReplaceView: View {
         .padding(8)
     }
     
-    func updateMatchInfo(current: Int, total: Int) {
-        currentMatch = current
-        matchCount = total
-    }
 }
 
 /// Search state manager
@@ -190,7 +186,9 @@ class SearchState: ObservableObject {
         onFindNext: {},
         onFindPrevious: {},
         onReplace: {},
-        onReplaceAll: {}
+        onReplaceAll: {},
+        matchCount: 5,
+        currentMatchIndex: 2
     )
     .frame(width: 400)
 }

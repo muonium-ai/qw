@@ -17,7 +17,8 @@ struct DocumentEditorView: View {
     @Binding var document: TextDocument
     var fileURL: URL?
     var initialReadOnly: Bool = false
-    
+
+    @Environment(\.colorScheme) private var colorScheme
     @State private var fileType: SupportedFileType = .plainText
     @State private var isReadOnly: Bool = false
     @StateObject private var searchState = SearchState()
@@ -46,7 +47,9 @@ struct DocumentEditorView: View {
                         if !isReadOnly {
                             searchState.replaceAll(in: &document.text)
                         }
-                    }
+                    },
+                    matchCount: searchState.matches.count,
+                    currentMatchIndex: searchState.currentMatchIndex
                 )
                 .onChange(of: searchState.searchText) { _, _ in
                     searchState.findMatches(in: document.text)
@@ -193,7 +196,7 @@ struct DocumentEditorView: View {
             text: document.text,
             fileType: fileType,
             fileName: fileURL?.lastPathComponent,
-            theme: settings.syntaxTheme(for: .light), // Use light theme for printing
+            theme: settings.syntaxTheme(for: .light), // Intentionally light: prints on paper are most legible with a light background
             includeLineNumbers: settings.showLineNumbers,
             fontSize: settings.fontSize,
             fontName: settings.selectedFont.fontName
@@ -207,7 +210,7 @@ struct DocumentEditorView: View {
             text: document.text,
             fileType: fileType,
             fileName: fileURL?.lastPathComponent,
-            theme: settings.syntaxTheme(for: .light), // Use light theme for PDF
+            theme: settings.syntaxTheme(for: colorScheme),
             includeLineNumbers: settings.showLineNumbers,
             fontSize: settings.fontSize,
             fontName: settings.selectedFont.fontName
@@ -223,7 +226,7 @@ struct DocumentEditorView: View {
             text: document.text,
             fileType: fileType,
             fileName: fileURL?.lastPathComponent,
-            theme: settings.syntaxTheme(for: .light), // Use light theme for PNG
+            theme: settings.syntaxTheme(for: colorScheme),
             includeLineNumbers: settings.showLineNumbers,
             fontSize: settings.fontSize,
             fontName: settings.selectedFont.fontName
@@ -299,21 +302,6 @@ extension FocusedValues {
     var isReadOnly: Bool? {
         get { self[IsReadOnlyFocusKey.self] }
         set { self[IsReadOnlyFocusKey.self] = newValue }
-    }
-}
-
-/// Document scene for the app
-struct QWDocumentScene: Scene {
-    var body: some Scene {
-        DocumentGroup(newDocument: TextDocument()) { file in
-            DocumentEditorView(
-                document: file.$document,
-                fileURL: file.fileURL
-            )
-            #if os(macOS)
-            .frame(minWidth: 600, minHeight: 400)
-            #endif
-        }
     }
 }
 

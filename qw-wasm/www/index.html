@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QW Hex Viewer</title>
+  <link rel="icon" href="favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Toolbar -->
+  <header id="toolbar">
+    <div class="toolbar-left">
+      <span class="app-title">QW Hex Viewer</span>
+      <button id="btn-browse" title="Open file">Browse</button>
+      <input type="file" id="file-input" hidden>
+    </div>
+    <div class="toolbar-center" id="file-info-bar">
+      <span id="file-type-badge"></span>
+      <span id="file-size-info"></span>
+      <span id="file-rows-info"></span>
+    </div>
+    <div class="toolbar-right">
+      <button id="btn-ai-explain" title="Explain file structure with AI" disabled>Explain with AI</button>
+      <button id="btn-toggle-inspector" title="Toggle data inspector" class="active">Inspector</button>
+      <button id="btn-toggle-ai-panel" title="Toggle AI panel">AI Panel</button>
+    </div>
+  </header>
+
+  <!-- Main content -->
+  <main id="app">
+    <!-- Drop zone (shown when no file loaded) -->
+    <div id="drop-zone">
+      <div class="drop-zone-content">
+        <div class="drop-icon">&#x2B07;</div>
+        <p class="drop-title">Drop a file to inspect</p>
+        <p class="drop-subtitle">or click Browse to select a file</p>
+      </div>
+    </div>
+
+    <!-- Hex viewer (shown when file loaded) -->
+    <div id="hex-viewer" class="hidden">
+      <!-- Hex grid area -->
+      <div id="hex-grid-wrapper">
+        <!-- Column header -->
+        <div id="hex-header"></div>
+        <!-- Virtual scroll container -->
+        <div id="hex-scroll-container">
+          <div id="hex-scroll-content"></div>
+        </div>
+      </div>
+
+      <!-- Data inspector panel (right sidebar) -->
+      <aside id="data-inspector" class="side-panel">
+        <div class="panel-header">
+          <span>Data Inspector</span>
+          <div class="endian-toggle">
+            <button id="btn-le" class="active" title="Little Endian">LE</button>
+            <button id="btn-be" title="Big Endian">BE</button>
+          </div>
+        </div>
+        <div id="inspector-content" class="panel-body">
+          <p class="inspector-placeholder">Click a byte to inspect</p>
+        </div>
+      </aside>
+
+      <!-- AI panel (collapsible right sidebar) -->
+      <aside id="ai-panel" class="side-panel collapsed">
+        <div class="panel-header">
+          <span>AI Analysis</span>
+          <button id="btn-close-ai-panel" title="Close">&times;</button>
+        </div>
+        <div id="ai-panel-content" class="panel-body">
+          <p class="inspector-placeholder">Click "Explain with AI" to analyze this file</p>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <!-- Status bar -->
+  <footer id="status-bar">
+    <span id="status-file-name">No file loaded</span>
+    <span id="status-file-size"></span>
+    <span id="status-cursor-offset"></span>
+    <span id="status-detected-type"></span>
+  </footer>
+
+  <!-- AI API key modal -->
+  <div id="api-key-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <h3>Claude API Key</h3>
+      <p>Enter your Anthropic API key to use AI analysis.</p>
+      <input type="password" id="api-key-input" placeholder="sk-ant-..." autocomplete="off">
+      <div class="modal-actions">
+        <button id="btn-cancel-api-key">Cancel</button>
+        <button id="btn-save-api-key" class="primary">Save &amp; Explain</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

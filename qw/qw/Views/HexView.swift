@@ -69,6 +69,10 @@ struct HexView: View {
 
     @Environment(\.undoManager) private var environmentUndoManager
 
+    // MARK: - Hex search state
+
+    @StateObject private var hexSearchState = HexSearchState()
+
     /// The normalized (ordered) range of selected byte indices, if any.
     private var selectionRange: ClosedRange<Int>? {
         guard let s = selectionStart, let e = selectionEnd else { return nil }
@@ -163,6 +167,22 @@ struct HexView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if hexSearchState.isVisible {
+                HexSearchView(
+                    state: hexSearchState,
+                    data: displayData,
+                    hexDocument: isEditable ? hexDocumentStorage : nil
+                )
+            }
+            if hexSearchState.isGoToOffsetVisible {
+                GoToOffsetView(
+                    isPresented: $hexSearchState.isGoToOffsetVisible,
+                    dataCount: displayData.count
+                ) { offset in
+                    selectionStart = offset
+                    selectionEnd = offset
+                }
+            }
             if displayData.isEmpty {
                 emptyView
             } else {
@@ -178,6 +198,23 @@ struct HexView: View {
             return [item]
         }
         #endif
+        .toolbar {
+            ToolbarItemGroup(placement: .automatic) {
+                Button {
+                    hexSearchState.isVisible.toggle()
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                }
+                .help("Find in hex")
+
+                Button {
+                    hexSearchState.isGoToOffsetVisible.toggle()
+                } label: {
+                    Image(systemName: "arrow.right.to.line")
+                }
+                .help("Go to offset")
+            }
+        }
         .onAppear {
             if isEditable {
                 hexDocumentStorage.undoManager = environmentUndoManager
@@ -364,13 +401,15 @@ struct HexView: View {
 
     /// A single hex byte cell that supports click-to-select and shift-click-to-extend.
     /// In edit mode, the cursor byte has an opaque accent highlight.
+    /// Search matches are highlighted; the current match uses a distinct color.
     private func hexByteView(byte: UInt8, absoluteIndex: Int) -> some View {
         let isCursor = isEditable && isCursorByte(absoluteIndex) && !asciiInputMode
         let isInSelection = isSelected(absoluteIndex) && !isCursor
+        let matchHighlight = searchMatchHighlight(for: absoluteIndex)
 
         return Text(String(format: "%02x ", byte))
             .foregroundStyle(isCursor ? Color.white : byteColor(byte))
-            .background(isCursor ? Color.accentColor.opacity(0.8) : (isInSelection ? selectionHighlight : Color.clear))
+            .background(isCursor ? Color.accentColor.opacity(0.8) : (isInSelection ? selectionHighlight : matchHighlight))
             .contentShape(Rectangle())
             .onTapGesture {
                 handleByteTap(absoluteIndex, extend: false, ascii: false)
@@ -386,13 +425,15 @@ struct HexView: View {
 
     /// A single ASCII byte cell that mirrors selection highlighting.
     /// In edit mode with ASCII input, the cursor byte has an opaque accent highlight.
+    /// Search matches are highlighted; the current match uses a distinct color.
     private func asciiByteView(byte: UInt8, absoluteIndex: Int) -> some View {
         let isCursor = isEditable && isCursorByte(absoluteIndex) && asciiInputMode
         let isInSelection = isSelected(absoluteIndex) && !isCursor
+        let matchHighlight = searchMatchHighlight(for: absoluteIndex)
 
         return Text(asciiCharacter(byte))
             .foregroundStyle(isCursor ? Color.white : byteColor(byte))
-            .background(isCursor ? Color.accentColor.opacity(0.8) : (isInSelection ? selectionHighlight : Color.clear))
+            .background(isCursor ? Color.accentColor.opacity(0.8) : (isInSelection ? selectionHighlight : matchHighlight))
             .contentShape(Rectangle())
             .onTapGesture {
                 handleByteTap(absoluteIndex, extend: false, ascii: true)
@@ -434,6 +475,22 @@ struct HexView: View {
 
     private var selectionHighlight: Color {
         Color.accentColor.opacity(0.3)
+    }
+
+    /// Returns a highlight color if the byte at `index` falls within a search match.
+    /// The current match gets a distinct orange highlight; other matches are yellow.
+    private func searchMatchHighlight(for index: Int) -> Color {
+        guard hexSearchState.isVisible, !hexSearchState.matches.isEmpty else {
+            return Color.clear
+        }
+        for (i, match) in hexSearchState.matches.enumerated() {
+            if match.contains(index) {
+                return i == hexSearchState.currentMatchIndex
+                    ? Color.orange.opacity(0.6)
+                    : Color.yellow.opacity(0.35)
+            }
+        }
+        return Color.clear
     }
 
     // MARK: - Keyboard handling (edit mode)

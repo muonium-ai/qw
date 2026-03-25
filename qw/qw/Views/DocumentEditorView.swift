@@ -184,7 +184,12 @@ struct DocumentEditorView: View {
                     let data = document.text.data(using: .utf8) ?? Data()
                     try data.write(to: url)
                 } catch {
-                    print("Error saving file: \(error)")
+                    let alert = NSAlert()
+                    alert.messageText = "Export Error"
+                    alert.informativeText = "Failed to save file: \(error.localizedDescription)"
+                    alert.alertStyle = .warning
+                    alert.addButton(withTitle: "OK")
+                    alert.runModal()
                 }
             }
         }
@@ -201,7 +206,7 @@ struct DocumentEditorView: View {
             fontSize: settings.fontSize,
             fontName: settings.selectedFont.fontName
         )
-        exporter.print()
+        exporter.printDocument()
     }
     
     private func exportAsPDF() {

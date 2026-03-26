@@ -604,6 +604,100 @@ struct HexView: View {
 
     // MARK: - Row rendering
 
+    /// Build an `AttributedString` for the hex byte section of a row.
+    /// Each byte is 3 characters ("xx "), with per-byte foreground and background colors.
+    /// Returns a single `Text` view — dramatically fewer AttributeGraph nodes than
+    /// 16 individual `Text` views with gestures.
+    private func hexSectionAttributedString(_ row: HexRow, firstHalf: Bool) -> AttributedString {
+        let rangeStart = firstHalf ? 0 : 8
+        let rangeEnd = firstHalf ? 8 : 16
+        var result = AttributedString()
+
+        for i in rangeStart..<rangeEnd {
+            var piece: AttributedString
+            if i < row.bytes.count {
+                let byte = row.bytes[row.bytes.startIndex + i]
+                let absIdx = row.offset + i
+                piece = AttributedString(String(format: "%02x ", byte))
+
+                let isCursor = isEditable && isCursorByte(absIdx) && !asciiInputMode
+                let isInSel = isSelected(absIdx) && !isCursor
+                let matchHL = searchMatchHighlight(for: absIdx)
+                let sectionBg = sectionBackground(for: absIdx)
+
+                // Foreground
+                piece.foregroundColor = isCursor ? theme.background : byteColor(byte)
+
+                // Background: layer section bg, then highlight on top
+                let highlight: Color = isCursor ? theme.selection
+                    : (isInSel ? selectionHighlight
+                    : (matchHL != Color.clear ? matchHL : .clear))
+                if highlight != .clear {
+                    piece.backgroundColor = highlight
+                } else if sectionBg != .clear {
+                    piece.backgroundColor = sectionBg
+                }
+            } else {
+                piece = AttributedString("   ")
+            }
+            result.append(piece)
+        }
+        return result
+    }
+
+    /// Build an `AttributedString` for the ASCII sidebar of a row.
+    /// Each byte is 1 character, with per-byte foreground and background colors.
+    private func asciiSectionAttributedString(_ row: HexRow) -> AttributedString {
+        var result = AttributedString()
+
+        for i in 0..<row.bytes.count {
+            let byte = row.bytes[row.bytes.startIndex + i]
+            let absIdx = row.offset + i
+
+            var piece = AttributedString(asciiCharacter(byte))
+
+            let isCursor = isEditable && isCursorByte(absIdx) && asciiInputMode
+            let isInSel = isSelected(absIdx) && !isCursor
+            let matchHL = searchMatchHighlight(for: absIdx)
+            let sectionBg = sectionBackground(for: absIdx)
+
+            piece.foregroundColor = isCursor ? theme.background : byteColor(byte)
+
+            let highlight: Color = isCursor ? theme.selection
+                : (isInSel ? selectionHighlight
+                : (matchHL != Color.clear ? matchHL : .clear))
+            if highlight != .clear {
+                piece.backgroundColor = highlight
+            } else if sectionBg != .clear {
+                piece.backgroundColor = sectionBg
+            }
+
+            result.append(piece)
+        }
+        return result
+    }
+
+    /// Compute the byte index within the row from a tap's x-coordinate in the hex section.
+    /// Each hex byte occupies 3 monospace characters ("xx ").
+    private func hexByteIndex(from locationX: CGFloat, charWidth: CGFloat, firstHalf: Bool) -> Int? {
+        let charsPerByte: CGFloat = 3.0
+        let byteWidth = charWidth * charsPerByte
+        let localIndex = Int(locationX / byteWidth)
+        let offset = firstHalf ? 0 : 8
+        let index = offset + localIndex
+        // Clamp to valid range
+        if index < offset || index >= offset + 8 { return nil }
+        return index
+    }
+
+    /// Compute the byte index within the row from a tap's x-coordinate in the ASCII section.
+    /// Each ASCII byte occupies 1 monospace character.
+    private func asciiByteIndex(from locationX: CGFloat, charWidth: CGFloat, byteCount: Int) -> Int? {
+        let index = Int(locationX / charWidth)
+        if index < 0 || index >= byteCount { return nil }
+        return index
+    }
+
     private func hexRowView(_ row: HexRow) -> some View {
         HStack(spacing: 0) {
             // Offset gutter
@@ -612,114 +706,96 @@ struct HexView: View {
 
             Text("  ")
 
-            // Hex bytes — first 8
-            ForEach(0..<8, id: \.self) { i in
-                if i < row.bytes.count {
-                    let byte = row.bytes[row.bytes.startIndex + i]
-                    hexByteView(byte: byte, absoluteIndex: row.offset + i)
-                } else {
-                    Text("   ")
+            // Hex bytes — first 8 (single Text with AttributedString)
+            Text(hexSectionAttributedString(row, firstHalf: true))
+                .contentShape(Rectangle())
+                .onTapGesture { location in
+                    hexSectionTapped(row: row, location: location, firstHalf: true, extend: false)
                 }
-            }
+                #if os(macOS)
+                .simultaneousGesture(
+                    SpatialTapGesture().modifiers(.shift).onEnded { value in
+                        hexSectionTapped(row: row, location: value.location, firstHalf: true, extend: true)
+                    }
+                )
+                #endif
 
             // Wider gap between byte 8 and 9
             Text(" ")
 
-            // Hex bytes — second 8
-            ForEach(8..<16, id: \.self) { i in
-                if i < row.bytes.count {
-                    let byte = row.bytes[row.bytes.startIndex + i]
-                    hexByteView(byte: byte, absoluteIndex: row.offset + i)
-                } else {
-                    Text("   ")
+            // Hex bytes — second 8 (single Text with AttributedString)
+            Text(hexSectionAttributedString(row, firstHalf: false))
+                .contentShape(Rectangle())
+                .onTapGesture { location in
+                    hexSectionTapped(row: row, location: location, firstHalf: false, extend: false)
                 }
-            }
+                #if os(macOS)
+                .simultaneousGesture(
+                    SpatialTapGesture().modifiers(.shift).onEnded { value in
+                        hexSectionTapped(row: row, location: value.location, firstHalf: false, extend: true)
+                    }
+                )
+                #endif
 
             Text(" ")
 
-            // ASCII sidebar
+            // ASCII sidebar (single Text with AttributedString)
             Text("|")
                 .foregroundStyle(theme.lineNumber)
-            ForEach(0..<row.bytes.count, id: \.self) { i in
-                let byte = row.bytes[row.bytes.startIndex + i]
-                asciiByteView(byte: byte, absoluteIndex: row.offset + i)
-            }
+            Text(asciiSectionAttributedString(row))
+                .contentShape(Rectangle())
+                .onTapGesture { location in
+                    asciiSectionTapped(row: row, location: location, extend: false)
+                }
+                #if os(macOS)
+                .simultaneousGesture(
+                    SpatialTapGesture().modifiers(.shift).onEnded { value in
+                        asciiSectionTapped(row: row, location: value.location, extend: true)
+                    }
+                )
+                #endif
             Text("|")
                 .foregroundStyle(theme.lineNumber)
         }
         .font(.system(.body, design: .monospaced))
     }
 
-    /// A single hex byte cell that supports click-to-select and shift-click-to-extend.
-    /// In edit mode, the cursor byte has an opaque accent highlight.
-    /// Search matches are highlighted; the current match uses a distinct color.
-    private func hexByteView(byte: UInt8, absoluteIndex: Int) -> some View {
-        let isCursor = isEditable && isCursorByte(absoluteIndex) && !asciiInputMode
-        let isInSelection = isSelected(absoluteIndex) && !isCursor
-        let matchHighlight = searchMatchHighlight(for: absoluteIndex)
-        let sectionBg = sectionBackground(for: absoluteIndex)
-        let fgHighlight: Color = isCursor ? theme.selection
-            : (isInSelection ? selectionHighlight
-            : (matchHighlight != Color.clear ? matchHighlight : .clear))
+    /// Handle a tap on a hex section (first or second half of the row).
+    /// Uses the tap x-coordinate to determine which byte was clicked.
+    private func hexSectionTapped(row: HexRow, location: CGPoint, firstHalf: Bool, extend: Bool) {
+        // Estimate monospace character width from system body font.
+        // NSFont.monospacedSystemFont matches .system(.body, design: .monospaced).
+        #if os(macOS)
+        let charWidth: CGFloat = {
+            let font = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+            let sample = NSAttributedString(string: "0", attributes: [.font: font])
+            return sample.size().width
+        }()
+        #else
+        let charWidth: CGFloat = 8.0 // reasonable fallback for iOS
+        #endif
 
-        let tooltip = annotationTooltip(for: absoluteIndex) ?? sectionTooltip(for: absoluteIndex)
-
-        return Text(String(format: "%02x ", byte))
-            .foregroundStyle(isCursor ? theme.background : byteColor(byte))
-            .background(
-                ZStack {
-                    sectionBg
-                    fgHighlight
-                }
-            )
-            .contentShape(Rectangle())
-            .help(tooltip ?? "")
-            .onTapGesture {
-                handleByteTap(absoluteIndex, extend: false, ascii: false)
-            }
-            #if os(macOS)
-            .simultaneousGesture(
-                TapGesture().modifiers(.shift).onEnded {
-                    handleByteTap(absoluteIndex, extend: true, ascii: false)
-                }
-            )
-            #endif
+        guard let localIdx = hexByteIndex(from: location.x, charWidth: charWidth, firstHalf: firstHalf) else { return }
+        let absIdx = row.offset + localIdx
+        guard localIdx < row.bytes.count else { return }
+        handleByteTap(absIdx, extend: extend, ascii: false)
     }
 
-    /// A single ASCII byte cell that mirrors selection highlighting.
-    /// In edit mode with ASCII input, the cursor byte has an opaque accent highlight.
-    /// Search matches are highlighted; the current match uses a distinct color.
-    private func asciiByteView(byte: UInt8, absoluteIndex: Int) -> some View {
-        let isCursor = isEditable && isCursorByte(absoluteIndex) && asciiInputMode
-        let isInSelection = isSelected(absoluteIndex) && !isCursor
-        let matchHighlight = searchMatchHighlight(for: absoluteIndex)
-        let sectionBg = sectionBackground(for: absoluteIndex)
-        let fgHighlight: Color = isCursor ? theme.selection
-            : (isInSelection ? selectionHighlight
-            : (matchHighlight != Color.clear ? matchHighlight : .clear))
+    /// Handle a tap on the ASCII section.
+    private func asciiSectionTapped(row: HexRow, location: CGPoint, extend: Bool) {
+        #if os(macOS)
+        let charWidth: CGFloat = {
+            let font = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+            let sample = NSAttributedString(string: "0", attributes: [.font: font])
+            return sample.size().width
+        }()
+        #else
+        let charWidth: CGFloat = 8.0
+        #endif
 
-        let tooltip = annotationTooltip(for: absoluteIndex) ?? sectionTooltip(for: absoluteIndex)
-
-        return Text(asciiCharacter(byte))
-            .foregroundStyle(isCursor ? theme.background : byteColor(byte))
-            .background(
-                ZStack {
-                    sectionBg
-                    fgHighlight
-                }
-            )
-            .contentShape(Rectangle())
-            .help(tooltip ?? "")
-            .onTapGesture {
-                handleByteTap(absoluteIndex, extend: false, ascii: true)
-            }
-            #if os(macOS)
-            .simultaneousGesture(
-                TapGesture().modifiers(.shift).onEnded {
-                    handleByteTap(absoluteIndex, extend: true, ascii: true)
-                }
-            )
-            #endif
+        guard let localIdx = asciiByteIndex(from: location.x, charWidth: charWidth, byteCount: row.bytes.count) else { return }
+        let absIdx = row.offset + localIdx
+        handleByteTap(absIdx, extend: extend, ascii: true)
     }
 
     // MARK: - Selection logic

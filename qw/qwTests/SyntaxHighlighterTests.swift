@@ -62,8 +62,7 @@ final class SyntaxHighlighterTests: XCTestCase {
     }
 
     func testCommentShouldNotContainStringTokens_JavaScript() throws {
-        // Crashes in test runner due to memory corruption on macOS 26
-        throw XCTSkip("Crashes in test runner on macOS 26 — tokenize triggers memory corruption")
+        throw XCTSkip("Crashes in test runner on macOS 26 — SyntaxHighlighter class dealloc triggers memory corruption")
         let text = "// \"string inside comment\""
         let highlighter = SyntaxHighlighter(fileType: .javascript, theme: .dark)
         let tokens = highlighter.tokenize(text)

@@ -70,9 +70,7 @@ final class DocumentExporterTests: XCTestCase {
     }
 
     func testPNGExportCreatesFile() throws {
-        // Skip: crashes due to memory corruption with @testable import on macOS 26.
-        // Re-enable when Apple fixes the underlying issue.
-        throw XCTSkip("Crashes due to memory corruption with @testable import on macOS 26")
+        throw XCTSkip("Crashes in test runner on macOS 26 — AppKit rendering triggers memory corruption")
         let exporter = DocumentExporter(
             text: "print(\"hello\")\n",
             fileType: .swift,

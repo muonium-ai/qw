@@ -29,6 +29,9 @@ struct DocumentEditorView: View {
     @State private var showBinaryAlert: Bool = false
     @StateObject private var searchState = SearchState()
 
+    // Format mismatch warning (T-000063)
+    @State private var mismatchResult: FormatMismatchDetector.MismatchResult?
+
     // Binary diff comparison state
     @State private var isComparing: Bool = false
     @State private var comparisonData: Data?
@@ -36,6 +39,9 @@ struct DocumentEditorView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Format mismatch warning banner (T-000063)
+            mismatchBannerView
+
             // Search/Replace bar (hidden in hex mode)
             if searchState.isVisible && !isHexMode && !isImageMode {
                 SearchReplaceView(
@@ -95,8 +101,33 @@ struct DocumentEditorView: View {
 
             // Auto-detect binary files: open images/videos/audio directly, prompt for others
             if document.isBinaryDetected {
-                let detectedFormat = MagicBytes.detect(from: document.rawData)?.name
-                if isImageFile(data: document.rawData) {
+                let detectedSignature = MagicBytes.detect(from: document.rawData)
+                let detectedFormat = detectedSignature?.name
+
+                // Determine category from DB if available (T-000063)
+                let dbCategory: String? = {
+                    let db = FormatDatabase.shared
+                    guard db.isAvailable else { return nil }
+                    return db.detectSignature(from: document.rawData)?.category
+                }()
+
+                // Check for extension vs content mismatch (T-000063)
+                let mismatch = FormatMismatchDetector.check(
+                    fileURL: fileURL,
+                    detectedFormatName: detectedFormat,
+                    detectedCategory: dbCategory
+                )
+                mismatchResult = mismatch
+
+                // Critical mismatch with executable content: always show the binary
+                // dialog so the user makes an explicit choice — never auto-route.
+                let blockAutoRoute = mismatch?.severity == .critical
+                    && FormatMismatchDetector.isExecutableFormat(name: detectedFormat ?? "")
+
+                if blockAutoRoute {
+                    showBinaryAlert = true
+                    FormatLogger.logOpenFailure(fileURL: fileURL, formatName: detectedFormat, mode: "text", error: "Critical mismatch — executable disguised as \(mismatch?.extensionType ?? "unknown"); blocked auto-route")
+                } else if isImageFile(data: document.rawData) {
                     isImageMode = true
                     FormatLogger.logOpenSuccess(fileURL: fileURL, formatName: detectedFormat, mode: "image")
                 } else if isVideoFile(data: document.rawData) {
@@ -282,6 +313,25 @@ struct DocumentEditorView: View {
         }
     }
     #endif
+
+    // MARK: - Mismatch banner (T-000063)
+
+    @ViewBuilder
+    private var mismatchBannerView: some View {
+        if let mismatch = mismatchResult {
+            HStack {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(mismatch.severity == .critical ? .red : .yellow)
+                Text(mismatch.message)
+                    .font(.caption)
+                Spacer()
+                Button("Dismiss") { mismatchResult = nil }
+                    .buttonStyle(.plain)
+            }
+            .padding(8)
+            .background(mismatch.severity == .critical ? Color.red.opacity(0.15) : Color.yellow.opacity(0.15))
+        }
+    }
 
     // MARK: - Main content view (extracted to help the type-checker)
 

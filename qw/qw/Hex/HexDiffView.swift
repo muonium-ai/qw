@@ -198,44 +198,78 @@ struct HexDiffView: View {
         case left, right
     }
 
+    /// Build an `AttributedString` for the hex byte section of one pane row.
+    /// Each byte is 3 characters ("xx "), with per-byte foreground/background colors
+    /// reflecting diff state. Returns a single Text — dramatically fewer
+    /// AttributeGraph nodes than 16 individual Text views.
+    private func hexSectionAttributedString(data: Data, offset: Int, diffMap: [DiffRegionType], firstHalf: Bool) -> AttributedString {
+        let rangeStart = firstHalf ? 0 : 8
+        let rangeEnd = firstHalf ? 8 : 16
+        var result = AttributedString()
+
+        for i in rangeStart..<rangeEnd {
+            var piece: AttributedString
+            let byteIndex = offset + i
+            if byteIndex < data.count {
+                let byte = data[data.startIndex + byteIndex]
+                let diffType = byteIndex < diffMap.count ? diffMap[byteIndex] : .equal
+                piece = AttributedString(String(format: "%02x ", byte))
+                piece.foregroundColor = byteColor(byte)
+                let bg = backgroundForDiffType(diffType)
+                if bg != .clear {
+                    piece.backgroundColor = bg
+                }
+            } else {
+                piece = AttributedString("   ")
+            }
+            result.append(piece)
+        }
+        return result
+    }
+
+    /// Build an `AttributedString` for the ASCII sidebar of one pane row.
+    /// Each byte is 1 character, with per-byte foreground/background colors
+    /// reflecting diff state.
+    private func asciiSectionAttributedString(data: Data, offset: Int, diffMap: [DiffRegionType]) -> AttributedString {
+        var result = AttributedString()
+
+        for i in 0..<16 {
+            var piece: AttributedString
+            let byteIndex = offset + i
+            if byteIndex < data.count {
+                let byte = data[data.startIndex + byteIndex]
+                let diffType = byteIndex < diffMap.count ? diffMap[byteIndex] : .equal
+                piece = AttributedString(asciiCharacter(byte))
+                piece.foregroundColor = byteColor(byte)
+                let bg = backgroundForDiffType(diffType)
+                if bg != .clear {
+                    piece.backgroundColor = bg
+                }
+            } else {
+                piece = AttributedString(" ")
+            }
+            result.append(piece)
+        }
+        return result
+    }
+
     private func hexPaneBytes(data: Data, offset: Int, diffMap: [DiffRegionType], side: PaneSide) -> some View {
         HStack(spacing: 0) {
-            // Hex bytes
-            ForEach(0..<16, id: \.self) { i in
-                let byteIndex = offset + i
-                if byteIndex < data.count {
-                    let byte = data[data.startIndex + byteIndex]
-                    let diffType = byteIndex < diffMap.count ? diffMap[byteIndex] : .equal
-                    Text(String(format: "%02x ", byte))
-                        .foregroundStyle(byteColor(byte))
-                        .background(backgroundForDiffType(diffType))
-                } else {
-                    Text("   ")
-                }
+            // Hex bytes — first 8 (single Text with AttributedString)
+            Text(hexSectionAttributedString(data: data, offset: offset, diffMap: diffMap, firstHalf: true))
 
-                // Wider gap after byte 8
-                if i == 7 {
-                    Text(" ")
-                }
-            }
+            // Wider gap after byte 8
+            Text(" ")
+
+            // Hex bytes — second 8 (single Text with AttributedString)
+            Text(hexSectionAttributedString(data: data, offset: offset, diffMap: diffMap, firstHalf: false))
 
             Text(" ")
 
-            // ASCII sidebar
+            // ASCII sidebar (single Text with AttributedString)
             Text("|")
                 .foregroundStyle(.secondary)
-            ForEach(0..<16, id: \.self) { i in
-                let byteIndex = offset + i
-                if byteIndex < data.count {
-                    let byte = data[data.startIndex + byteIndex]
-                    let diffType = byteIndex < diffMap.count ? diffMap[byteIndex] : .equal
-                    Text(asciiCharacter(byte))
-                        .foregroundStyle(byteColor(byte))
-                        .background(backgroundForDiffType(diffType))
-                } else {
-                    Text(" ")
-                }
-            }
+            Text(asciiSectionAttributedString(data: data, offset: offset, diffMap: diffMap))
             Text("|")
                 .foregroundStyle(.secondary)
         }

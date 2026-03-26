@@ -58,10 +58,28 @@ The macOS app is sandboxed (`com.apple.security.app-sandbox = true` in
 
 No network, scripting, or process-execution entitlements are granted.
 
+## Process Execution (Sandboxed)
+
+QW can now execute external processes in controlled contexts:
+
+- **Media probing:** `ffprobe` for video/audio metadata (read-only, no sandbox needed).
+- **Quick Look:** `qlmanage -p` for file preview (system binary, read-only).
+- **Sandbox execution:** Native, WASM, Wine, and JVM runners use `sandbox-exec`
+  seatbelt profiles with deny-by-default policy, resource limits, environment
+  sanitisation, and mandatory user consent via confirmation dialog.
+
+All execution paths require explicit user action. No file content is ever
+auto-executed by opening a file.
+
+See [docs/security-and-stability.md](docs/security-and-stability.md) for the
+full security architecture, crash history, and threat model.
+
 ## Guarantees
 
-1. Opening any file (text or binary) in QW will never execute code from that file.
-2. Syntax highlighting is purely cosmetic and regex-based.
-3. Export to PDF/PNG does not interpret file contents as markup.
-4. The CLI wrapper does not pass file contents or names into shell evaluation.
-5. The app sandbox restricts filesystem and network access at the OS level.
+1. Opening any file (text or binary) in QW will never auto-execute code from that file.
+2. File type detection uses magic bytes, not file extensions.
+3. Syntax highlighting is purely cosmetic and regex-based.
+4. Export to PDF/PNG does not interpret file contents as markup.
+5. The CLI wrapper does not pass file contents or names into shell evaluation.
+6. The app sandbox restricts filesystem and network access at the OS level.
+7. Sandboxed execution requires explicit user consent and uses deny-by-default seatbelt profiles.

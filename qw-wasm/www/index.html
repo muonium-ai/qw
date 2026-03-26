@@ -3,24 +3,38 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>QW Hex Viewer</title>
+  <title>QW WASM Viewer</title>
   <link rel="icon" href="favicon.ico" type="image/x-icon">
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body data-theme="mocha">
   <!-- Toolbar -->
   <header id="toolbar">
     <div class="toolbar-left">
-      <span class="app-title">QW Hex Viewer</span>
+      <span class="app-title">QW WASM Viewer</span>
       <button id="btn-browse" title="Open file">Browse</button>
       <input type="file" id="file-input" hidden>
     </div>
     <div class="toolbar-center" id="file-info-bar">
       <span id="file-type-badge"></span>
+      <span id="file-mode-info"></span>
       <span id="file-size-info"></span>
       <span id="file-rows-info"></span>
     </div>
     <div class="toolbar-right">
+      <div id="view-toggle" class="hidden">
+        <button id="btn-view-text" title="Show text view">Text</button>
+        <button id="btn-view-binary" title="Show binary view">Binary</button>
+      </div>
+      <label class="theme-picker" for="theme-select">
+        <span>Theme</span>
+        <select id="theme-select" aria-label="Theme">
+          <option value="mocha">Mocha</option>
+          <option value="light">Light</option>
+          <option value="solarized-dark">Solarized Dark</option>
+          <option value="dracula">Dracula</option>
+        </select>
+      </label>
       <button id="btn-toggle-inspector" title="Toggle data inspector" class="active">Inspector</button>
     </div>
   </header>
@@ -36,31 +50,40 @@
       </div>
     </div>
 
-    <!-- Hex viewer (shown when file loaded) -->
+    <!-- Viewer shell (shown when file loaded) -->
     <div id="hex-viewer" class="hidden">
-      <!-- Hex grid area -->
-      <div id="hex-grid-wrapper">
-        <!-- Column header -->
-        <div id="hex-header"></div>
-        <!-- Virtual scroll container -->
-        <div id="hex-scroll-container">
-          <div id="hex-scroll-content"></div>
+      <section id="text-viewer" class="hidden">
+        <div id="text-view-note" class="viewer-note hidden"></div>
+        <div id="text-scroll-container">
+          <div id="text-content"></div>
         </div>
-      </div>
+      </section>
 
-      <!-- Data inspector panel (right sidebar) -->
-      <aside id="data-inspector" class="side-panel">
-        <div class="panel-header">
-          <span>Data Inspector</span>
-          <div class="endian-toggle">
-            <button id="btn-le" class="active" title="Little Endian">LE</button>
-            <button id="btn-be" title="Big Endian">BE</button>
+      <div id="binary-viewer" class="hidden">
+        <!-- Hex grid area -->
+        <div id="hex-grid-wrapper">
+          <!-- Column header -->
+          <div id="hex-header"></div>
+          <!-- Virtual scroll container -->
+          <div id="hex-scroll-container">
+            <div id="hex-scroll-content"></div>
           </div>
         </div>
-        <div id="inspector-content" class="panel-body">
-          <p class="inspector-placeholder">Click a byte to inspect</p>
-        </div>
-      </aside>
+
+        <!-- Data inspector panel (right sidebar) -->
+        <aside id="data-inspector" class="side-panel">
+          <div class="panel-header">
+            <span>Data Inspector</span>
+            <div class="endian-toggle">
+              <button id="btn-le" class="active" title="Little Endian">LE</button>
+              <button id="btn-be" title="Big Endian">BE</button>
+            </div>
+          </div>
+          <div id="inspector-content" class="panel-body">
+            <p class="inspector-placeholder">Click a byte to inspect</p>
+          </div>
+        </aside>
+      </div>
 
     </div>
   </main>

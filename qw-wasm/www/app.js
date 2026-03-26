@@ -1,40 +1,66 @@
-// QW Hex Viewer — Browser UI
-// WASM module loaded dynamically — falls back to JS if pkg/ not built
+import {
+  DEFAULT_THEME,
+  THEMES,
+  analyzeFile,
+  coerceTheme,
+  renderTextDocument,
+} from './viewer-core.mjs';
 
-let wasmInit, detect_file_type, format_hex_row, decode_bytes, get_file_info;
+// QW WASM Viewer browser UI
+// WASM module loaded dynamically and falls back to JS helpers if pkg/ is not built.
+
+let wasmInit;
+let detect_file_type;
+let format_hex_row;
+let decode_bytes;
 
 // ─── State ───────────────────────────────────────────────────
 const state = {
-  fileData: null,       // Uint8Array
+  fileData: null,
   fileName: '',
   fileSize: 0,
   fileType: '',
   totalRows: 0,
-  cursor: -1,           // selected byte offset (-1 = none)
+  cursor: -1,
   littleEndian: true,
   wasmReady: false,
-  rowHeight: 22,        // must match CSS --row-height
+  rowHeight: 22,
   bytesPerRow: 16,
-  visibleRows: [],      // currently rendered row indices
-  scrollTop: 0,
+  activeView: 'binary',
+  analysis: null,
+  theme: loadStoredTheme(),
+  renderedTextHtml: '',
 };
 
 // ─── DOM refs ────────────────────────────────────────────────
 const $ = (sel) => document.querySelector(sel);
-const dropZone       = $('#drop-zone');
-const hexViewer      = $('#hex-viewer');
+const body = document.body;
+const dropZone = $('#drop-zone');
+const hexViewer = $('#hex-viewer');
+const binaryViewer = $('#binary-viewer');
+const textViewer = $('#text-viewer');
+const textViewNote = $('#text-view-note');
+const textScrollContainer = $('#text-scroll-container');
+const textContent = $('#text-content');
 const scrollContainer = $('#hex-scroll-container');
-const scrollContent  = $('#hex-scroll-content');
-const hexHeader      = $('#hex-header');
-const inspectorEl    = $('#inspector-content');
+const scrollContent = $('#hex-scroll-content');
+const hexHeader = $('#hex-header');
+const dataInspector = $('#data-inspector');
+const inspectorEl = $('#inspector-content');
+const btnToggleInspector = $('#btn-toggle-inspector');
+const btnViewText = $('#btn-view-text');
+const btnViewBinary = $('#btn-view-binary');
+const viewToggle = $('#view-toggle');
+const themeSelect = $('#theme-select');
 const statusFileName = $('#status-file-name');
 const statusFileSize = $('#status-file-size');
-const statusCursor   = $('#status-cursor-offset');
-const statusType     = $('#status-detected-type');
-const fileTypeBadge  = $('#file-type-badge');
-const fileSizeInfo   = $('#file-size-info');
-const fileRowsInfo   = $('#file-rows-info');
-const fileInput      = $('#file-input');
+const statusCursor = $('#status-cursor-offset');
+const statusType = $('#status-detected-type');
+const fileTypeBadge = $('#file-type-badge');
+const fileModeInfo = $('#file-mode-info');
+const fileSizeInfo = $('#file-size-info');
+const fileRowsInfo = $('#file-rows-info');
+const fileInput = $('#file-input');
 
 // ─── Init WASM ───────────────────────────────────────────────
 async function initWasm() {
@@ -44,7 +70,6 @@ async function initWasm() {
     detect_file_type = wasm.detect_file_type;
     format_hex_row = wasm.format_hex_row;
     decode_bytes = wasm.decode_bytes;
-    get_file_info = wasm.get_file_info;
     await wasmInit();
     state.wasmReady = true;
     console.log('[QW] WASM module loaded');
@@ -58,7 +83,6 @@ async function initWasm() {
 const fallback = {
   detect_file_type(bytes) {
     if (!bytes || bytes.length < 4) return 'Unknown';
-    const magic = Array.from(bytes.slice(0, 4)).map(b => b.toString(16).padStart(2, '0')).join(' ');
     const sig = (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
     const sig2 = (bytes[0] << 8) | bytes[1];
     if (sig === 0x89504e47) return 'PNG Image';
@@ -71,30 +95,32 @@ const fallback = {
     if (sig === 0xcafebabe || sig === 0xfeedface || sig === 0xfeedfacf) return 'Mach-O Binary';
     if (bytes[0] === 0x52 && bytes[1] === 0x61 && bytes[2] === 0x72) return 'RAR Archive';
     if (sig === 0x1f8b0800 || sig2 === 0x1f8b) return 'Gzip Archive';
-    // Check if mostly ASCII text
+
     let textCount = 0;
     const check = Math.min(bytes.length, 512);
-    for (let i = 0; i < check; i++) {
-      if ((bytes[i] >= 32 && bytes[i] < 127) || bytes[i] === 10 || bytes[i] === 13 || bytes[i] === 9) textCount++;
+    for (let i = 0; i < check; i += 1) {
+      if ((bytes[i] >= 32 && bytes[i] < 127) || bytes[i] === 10 || bytes[i] === 13 || bytes[i] === 9) {
+        textCount += 1;
+      }
     }
-    if (textCount / check > 0.85) return 'Text File';
+    if (check > 0 && textCount / check > 0.85) return 'Text File';
     return 'Binary File';
   },
 
   format_hex_row(bytes, offset) {
-    // Returns JSON string matching WASM interface
     const hex = [];
     const ascii = [];
     const types = [];
-    for (let i = 0; i < 16; i++) {
+
+    for (let i = 0; i < 16; i += 1) {
       if (i < bytes.length) {
-        const b = bytes[i];
-        hex.push(b.toString(16).padStart(2, '0'));
-        ascii.push((b >= 32 && b < 127) ? String.fromCharCode(b) : '.');
-        if (b === 0) types.push('null');
-        else if (b < 32) types.push('control');
-        else if (b < 127) types.push('printable');
-        else if (b === 0x09 || b === 0x0a || b === 0x0d || b === 0x20) types.push('whitespace');
+        const value = bytes[i];
+        hex.push(value.toString(16).padStart(2, '0'));
+        ascii.push(value >= 32 && value < 127 ? String.fromCharCode(value) : '.');
+        if (value === 0) types.push('null');
+        else if (value === 0x09 || value === 0x0A || value === 0x0D || value === 0x20) types.push('whitespace');
+        else if (value < 32) types.push('control');
+        else if (value < 127) types.push('printable');
         else types.push('high');
       } else {
         hex.push('  ');
@@ -102,51 +128,43 @@ const fallback = {
         types.push('null');
       }
     }
+
     return JSON.stringify({ offset, hex, ascii, types });
   },
 
   decode_bytes(bytes, offset, littleEndian) {
     if (!bytes || offset < 0 || offset >= bytes.length) return '{}';
+
     const remaining = bytes.length - offset;
     const view = new DataView(bytes.buffer, bytes.byteOffset + offset, Math.min(remaining, 8));
-    const result = {};
-    result.offset = '0x' + offset.toString(16).padStart(8, '0');
-    result.uint8 = view.getUint8(0);
-    result.int8 = view.getInt8(0);
-    result.binary = view.getUint8(0).toString(2).padStart(8, '0');
-    result.ascii = (result.uint8 >= 32 && result.uint8 < 127) ? String.fromCharCode(result.uint8) : 'N/A';
+    const result = {
+      offset: `0x${offset.toString(16).padStart(8, '0')}`,
+      uint8: view.getUint8(0),
+      int8: view.getInt8(0),
+    };
+
+    result.binary = result.uint8.toString(2).padStart(8, '0');
+    result.ascii = result.uint8 >= 32 && result.uint8 < 127 ? String.fromCharCode(result.uint8) : 'N/A';
+
     if (remaining >= 2) {
       result.uint16 = view.getUint16(0, littleEndian);
       result.int16 = view.getInt16(0, littleEndian);
     }
+
     if (remaining >= 4) {
       result.uint32 = view.getUint32(0, littleEndian);
       result.int32 = view.getInt32(0, littleEndian);
       result.float32 = view.getFloat32(0, littleEndian);
     }
+
     if (remaining >= 8) {
       result.float64 = view.getFloat64(0, littleEndian);
-      // int64 as BigInt
-      const lo = view.getUint32(0, littleEndian);
-      const hi = view.getInt32(4, littleEndian);
-      if (littleEndian) {
-        result.int64 = (BigInt(hi) << 32n) | BigInt(lo >>> 0);
-      } else {
-        const hiBE = view.getInt32(0, false);
-        const loBE = view.getUint32(4, false);
-        result.int64 = (BigInt(hiBE) << 32n) | BigInt(loBE >>> 0);
-      }
-      result.int64 = result.int64.toString();
+      const low = littleEndian ? view.getUint32(0, true) : view.getUint32(4, false);
+      const high = littleEndian ? view.getInt32(4, true) : view.getInt32(0, false);
+      result.int64 = ((BigInt(high) << 32n) | BigInt(low >>> 0)).toString();
     }
-    return JSON.stringify(result);
-  },
 
-  get_file_info(bytes) {
-    return JSON.stringify({
-      size: bytes.length,
-      type: fallback.detect_file_type(bytes),
-      rows: Math.ceil(bytes.length / 16),
-    });
+    return JSON.stringify(result);
   },
 };
 
@@ -161,77 +179,195 @@ function callFormatHexRow(rowBytes, offset) {
   return fallback.format_hex_row(rowBytes, offset);
 }
 
-function callDecodeBytes(bytes, offset, le) {
-  if (state.wasmReady) return decode_bytes(bytes, offset, le);
-  return fallback.decode_bytes(bytes, offset, le);
-}
-
-function callGetFileInfo(bytes) {
-  if (state.wasmReady) return get_file_info(bytes);
-  return fallback.get_file_info(bytes);
+function callDecodeBytes(bytes, offset, littleEndian) {
+  if (state.wasmReady) return decode_bytes(bytes, offset, littleEndian);
+  return fallback.decode_bytes(bytes, offset, littleEndian);
 }
 
 // ─── File loading ────────────────────────────────────────────
 function loadFile(file) {
   state.fileName = file.name;
+
   const reader = new FileReader();
-  reader.onload = (e) => {
-    state.fileData = new Uint8Array(e.target.result);
+  reader.onload = (event) => {
+    state.fileData = new Uint8Array(event.target.result);
     state.fileSize = state.fileData.length;
     state.totalRows = Math.ceil(state.fileSize / state.bytesPerRow);
     state.cursor = -1;
+    state.renderedTextHtml = '';
+    scrollContainer.scrollTop = 0;
+    textScrollContainer.scrollTop = 0;
 
-    // Detect file type
-    const headerBytes = state.fileData.slice(0, Math.min(512, state.fileData.length));
-    state.fileType = callDetectFileType(headerBytes);
+    const headerBytes = state.fileData.slice(0, Math.min(4096, state.fileData.length));
+    const detectedTypeRaw = callDetectFileType(headerBytes);
+    state.analysis = analyzeFile(state.fileName, state.fileData, detectedTypeRaw);
+    state.fileType = detectedTypeLabel();
 
-    // Update UI
-    showHexViewer();
-    updateFileInfo();
-    updateStatusBar();
+    showViewer();
     buildHeader();
-    renderVisibleRows();
-
+    setActiveView(state.analysis.preferredView);
   };
+
   reader.readAsArrayBuffer(file);
 }
 
-function showHexViewer() {
+function showViewer() {
   dropZone.classList.add('hidden');
   hexViewer.classList.remove('hidden');
-  // Set scroll content total height for virtual scrolling
-  scrollContent.style.height = (state.totalRows * state.rowHeight) + 'px';
+}
+
+function renderCurrentView() {
+  if (!state.fileData || !state.analysis) return;
+
+  const isText = state.activeView === 'text' && state.analysis.availableViews.text;
+  textViewer.classList.toggle('hidden', !isText);
+  binaryViewer.classList.toggle('hidden', isText);
+  btnToggleInspector.classList.toggle('hidden', isText);
+
+  if (isText) {
+    renderTextView();
+    return;
+  }
+
+  renderBinaryView();
+}
+
+function renderBinaryView() {
+  scrollContent.style.height = `${state.totalRows * state.rowHeight}px`;
+  scrollContent.innerHTML = '';
+  renderVisibleRows();
+
+  if (state.cursor >= 0) {
+    updateInspector();
+  } else {
+    inspectorEl.innerHTML = '<p class="inspector-placeholder">Click a byte to inspect</p>';
+  }
+}
+
+function renderTextView() {
+  const { analysis } = state;
+  if (!analysis || !analysis.canShowText) return;
+
+  if (!state.renderedTextHtml) {
+    state.renderedTextHtml = renderTextDocument(analysis.text, analysis.language, {
+      highlight: analysis.canHighlight,
+    });
+  }
+
+  textContent.innerHTML = state.renderedTextHtml;
+  textViewNote.textContent = analysis.note;
+  textViewNote.classList.toggle('hidden', !analysis.note);
+}
+
+function setActiveView(view) {
+  if (!state.fileData || !state.analysis) return;
+
+  const wantsText = view === 'text' && state.analysis.availableViews.text;
+  state.activeView = wantsText ? 'text' : 'binary';
+
+  updateViewToggle();
+  updateFileInfo();
+  updateStatusBar();
+  renderCurrentView();
+}
+
+function updateViewToggle() {
+  const canShowText = Boolean(state.analysis?.availableViews.text);
+  viewToggle.classList.toggle('hidden', !canShowText);
+  btnViewText.classList.toggle('active', canShowText && state.activeView === 'text');
+  btnViewBinary.classList.toggle('active', state.activeView === 'binary');
+  btnViewText.disabled = !canShowText;
 }
 
 function updateFileInfo() {
-  fileTypeBadge.textContent = state.fileType;
+  if (!state.analysis) return;
+
+  const textModeSuffix = state.analysis.canHighlight ? 'highlighted' : 'plain';
+  fileTypeBadge.textContent = detectedTypeLabel();
+  fileModeInfo.textContent = state.activeView === 'text'
+    ? `${state.analysis.textLabel} · ${textModeSuffix}`
+    : 'Binary view · hex + ASCII';
   fileSizeInfo.textContent = formatSize(state.fileSize);
-  fileRowsInfo.textContent = state.totalRows.toLocaleString() + ' rows';
+  fileRowsInfo.textContent = state.activeView === 'text'
+    ? `${state.analysis.lineCount.toLocaleString()} lines`
+    : `${state.totalRows.toLocaleString()} rows`;
 }
 
 function updateStatusBar() {
-  statusFileName.textContent = state.fileName;
-  statusFileSize.textContent = formatSize(state.fileSize);
-  statusType.textContent = state.fileType;
-  if (state.cursor >= 0) {
-    statusCursor.textContent = 'Offset: 0x' + state.cursor.toString(16).toUpperCase().padStart(8, '0');
-  } else {
+  statusFileName.textContent = state.fileName || 'No file loaded';
+  statusFileSize.textContent = state.fileData ? formatSize(state.fileSize) : '';
+
+  if (!state.fileData || !state.analysis) {
     statusCursor.textContent = '';
+    statusType.textContent = '';
+    return;
+  }
+
+  if (state.activeView === 'binary') {
+    statusCursor.textContent = state.cursor >= 0
+      ? `Offset 0x${state.cursor.toString(16).toUpperCase().padStart(8, '0')}`
+      : `${state.totalRows.toLocaleString()} rows`;
+  } else {
+    statusCursor.textContent = `${state.analysis.lineCount.toLocaleString()} lines`;
+  }
+
+  const themeLabel = THEMES.find((theme) => theme.id === state.theme)?.label || DEFAULT_THEME;
+  const viewLabel = state.activeView === 'text'
+    ? `${state.analysis.textLabel}${state.analysis.canHighlight ? '' : ' (plain)'}`
+    : 'Binary hex viewer';
+  statusType.textContent = `${viewLabel} · ${detectedTypeLabel()} · ${themeLabel}`;
+}
+
+function detectedTypeLabel() {
+  if (!state.analysis) {
+    return 'Unknown';
+  }
+
+  const detected = state.analysis.detectedType?.name;
+  if (detected && detected !== 'Unknown') {
+    return detected;
+  }
+
+  return state.analysis.canShowText ? 'Text File' : 'Binary File';
+}
+
+function loadStoredTheme() {
+  try {
+    return coerceTheme(window.localStorage.getItem('qw-viewer-theme'));
+  } catch {
+    return DEFAULT_THEME;
+  }
+}
+
+function applyTheme(themeName) {
+  const theme = coerceTheme(themeName);
+  state.theme = theme;
+  body.dataset.theme = theme;
+  themeSelect.value = theme;
+
+  try {
+    window.localStorage.setItem('qw-viewer-theme', theme);
+  } catch {
+    // Ignore storage access failures.
+  }
+
+  if (state.fileData) {
+    updateStatusBar();
   }
 }
 
 function formatSize(bytes) {
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 // ─── Column header ───────────────────────────────────────────
 function buildHeader() {
   let html = '<span class="header-offset">Offset</span><span class="header-hex">';
-  for (let i = 0; i < 16; i++) {
-    const gap = (i === 8) ? ' style="margin-left:8px"' : '';
+  for (let i = 0; i < 16; i += 1) {
+    const gap = i === 8 ? ' style="margin-left:8px"' : '';
     html += `<span style="display:inline-block;width:24px;text-align:center"${gap}>${i.toString(16).toUpperCase()}</span>`;
   }
   html += '</span><span class="header-ascii">ASCII</span>';
@@ -240,7 +376,7 @@ function buildHeader() {
 
 // ─── Virtual scroll rendering ────────────────────────────────
 function renderVisibleRows() {
-  if (!state.fileData) return;
+  if (!state.fileData || state.activeView !== 'binary') return;
 
   const containerHeight = scrollContainer.clientHeight;
   const scrollTop = scrollContainer.scrollTop;
@@ -249,27 +385,24 @@ function renderVisibleRows() {
   const firstVisible = Math.max(0, Math.floor(scrollTop / state.rowHeight) - overscan);
   const lastVisible = Math.min(
     state.totalRows - 1,
-    Math.ceil((scrollTop + containerHeight) / state.rowHeight) + overscan
+    Math.ceil((scrollTop + containerHeight) / state.rowHeight) + overscan,
   );
 
-  // Remove rows outside visible range
   const existing = scrollContent.querySelectorAll('.hex-row');
   const existingMap = new Map();
-  existing.forEach(el => {
-    const idx = parseInt(el.dataset.row, 10);
-    if (idx < firstVisible || idx > lastVisible) {
-      el.remove();
+  existing.forEach((element) => {
+    const index = Number.parseInt(element.dataset.row, 10);
+    if (index < firstVisible || index > lastVisible) {
+      element.remove();
     } else {
-      existingMap.set(idx, el);
+      existingMap.set(index, element);
     }
   });
 
-  // Add missing rows
   const fragment = document.createDocumentFragment();
-  for (let row = firstVisible; row <= lastVisible; row++) {
+  for (let row = firstVisible; row <= lastVisible; row += 1) {
     if (existingMap.has(row)) continue;
-    const el = createRowElement(row);
-    fragment.appendChild(el);
+    fragment.appendChild(createRowElement(row));
   }
   scrollContent.appendChild(fragment);
 }
@@ -278,71 +411,67 @@ function createRowElement(rowIndex) {
   const offset = rowIndex * state.bytesPerRow;
   const end = Math.min(offset + state.bytesPerRow, state.fileSize);
   const rowBytes = state.fileData.slice(offset, end);
-
-  // Call WASM/fallback
   const rowData = JSON.parse(callFormatHexRow(rowBytes, offset));
 
-  const div = document.createElement('div');
-  div.className = 'hex-row';
-  div.dataset.row = rowIndex;
-  div.style.top = (rowIndex * state.rowHeight) + 'px';
+  const row = document.createElement('div');
+  row.className = 'hex-row';
+  row.dataset.row = rowIndex;
+  row.style.top = `${rowIndex * state.rowHeight}px`;
 
-  // Offset column
   let html = `<span class="row-offset">${offset.toString(16).toUpperCase().padStart(8, '0')}</span>`;
 
-  // Hex bytes
   html += '<span class="row-hex">';
-  for (let i = 0; i < 16; i++) {
+  for (let i = 0; i < 16; i += 1) {
     const byteOffset = offset + i;
-    const hexVal = rowData.hex[i] || '  ';
+    const hexValue = rowData.hex[i] || '  ';
     const byteType = rowData.types[i] || 'null';
     const isSelected = byteOffset === state.cursor;
-    const gapClass = (i === 7) ? ' gap-after' : '';
-    const selClass = isSelected ? ' selected' : '';
-    const isEmpty = (i >= rowBytes.length) ? ' style="visibility:hidden"' : '';
-    html += `<span class="hex-byte byte-${byteType}${gapClass}${selClass}" data-offset="${byteOffset}"${isEmpty}>${hexVal}</span>`;
+    const gapClass = i === 7 ? ' gap-after' : '';
+    const selectedClass = isSelected ? ' selected' : '';
+    const isEmpty = i >= rowBytes.length ? ' style="visibility:hidden"' : '';
+    html += `<span class="hex-byte byte-${byteType}${gapClass}${selectedClass}" data-offset="${byteOffset}"${isEmpty}>${hexValue}</span>`;
   }
   html += '</span>';
 
-  // ASCII column
   html += '<span class="row-ascii">';
-  for (let i = 0; i < 16; i++) {
+  for (let i = 0; i < 16; i += 1) {
     const byteOffset = offset + i;
-    const ch = rowData.ascii[i] || ' ';
+    const character = rowData.ascii[i] || ' ';
     const isSelected = byteOffset === state.cursor;
-    const selClass = isSelected ? ' selected' : '';
+    const selectedClass = isSelected ? ' selected' : '';
     if (i < rowBytes.length) {
-      html += `<span class="ascii-byte${selClass}" data-offset="${byteOffset}">${escapeHtml(ch)}</span>`;
+      html += `<span class="ascii-byte${selectedClass}" data-offset="${byteOffset}">${escapeHtml(character)}</span>`;
     } else {
       html += '<span class="ascii-byte"> </span>';
     }
   }
   html += '</span>';
 
-  div.innerHTML = html;
-  return div;
+  row.innerHTML = html;
+  return row;
 }
 
-function escapeHtml(ch) {
-  if (ch === '<') return '&lt;';
-  if (ch === '>') return '&gt;';
-  if (ch === '&') return '&amp;';
-  if (ch === '"') return '&quot;';
-  return ch;
+function escapeHtml(text) {
+  return text
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
 }
 
 // ─── Selection & Inspector ───────────────────────────────────
 function selectByte(offset) {
-  if (offset < 0 || offset >= state.fileSize) return;
+  if (state.activeView !== 'binary' || offset < 0 || offset >= state.fileSize) return;
+
   state.cursor = offset;
   updateStatusBar();
   refreshSelection();
   updateInspector();
 
-  // Ensure cursor row is visible
   const row = Math.floor(offset / state.bytesPerRow);
   const rowTop = row * state.rowHeight;
   const rowBottom = rowTop + state.rowHeight;
+
   if (rowTop < scrollContainer.scrollTop) {
     scrollContainer.scrollTop = rowTop;
   } else if (rowBottom > scrollContainer.scrollTop + scrollContainer.clientHeight) {
@@ -358,17 +487,15 @@ function clearSelection() {
 }
 
 function refreshSelection() {
-  // Re-render all visible rows to update selection state
+  if (state.activeView !== 'binary') return;
   scrollContent.innerHTML = '';
   renderVisibleRows();
 }
 
 function updateInspector() {
-  if (state.cursor < 0 || !state.fileData) return;
+  if (state.activeView !== 'binary' || state.cursor < 0 || !state.fileData) return;
 
   const decoded = JSON.parse(callDecodeBytes(state.fileData, state.cursor, state.littleEndian));
-  let html = '';
-
   const fields = [
     ['Offset', decoded.offset],
     ['Uint8', decoded.uint8],
@@ -384,57 +511,53 @@ function updateInspector() {
     ['Float64', decoded.float64 !== undefined ? decoded.float64.toPrecision(15) : undefined],
   ];
 
-  for (const [label, value] of fields) {
-    if (value === undefined || value === null) continue;
-    html += `<div class="inspector-row"><span class="inspector-label">${label}</span><span class="inspector-value">${value}</span></div>`;
-  }
-
-  inspectorEl.innerHTML = html;
+  inspectorEl.innerHTML = fields
+    .filter(([, value]) => value !== undefined && value !== null)
+    .map(([label, value]) => (
+      `<div class="inspector-row"><span class="inspector-label">${label}</span><span class="inspector-value">${value}</span></div>`
+    ))
+    .join('');
 }
 
 // ─── Event handlers ──────────────────────────────────────────
-
-// Drag & drop
-document.addEventListener('dragover', (e) => {
-  e.preventDefault();
+document.addEventListener('dragover', (event) => {
+  event.preventDefault();
   dropZone.classList.add('drag-over');
 });
 
-document.addEventListener('dragleave', (e) => {
-  if (!e.relatedTarget || e.relatedTarget === document.documentElement) {
+document.addEventListener('dragleave', (event) => {
+  if (!event.relatedTarget || event.relatedTarget === document.documentElement) {
     dropZone.classList.remove('drag-over');
   }
 });
 
-document.addEventListener('drop', (e) => {
-  e.preventDefault();
+document.addEventListener('drop', (event) => {
+  event.preventDefault();
   dropZone.classList.remove('drag-over');
-  const file = e.dataTransfer?.files?.[0];
+  const file = event.dataTransfer?.files?.[0];
   if (file) loadFile(file);
 });
 
-// Browse button
 $('#btn-browse').addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', () => {
   const file = fileInput.files[0];
   if (file) loadFile(file);
+  fileInput.value = '';
 });
 
-// Virtual scroll
 scrollContainer.addEventListener('scroll', () => {
-  requestAnimationFrame(renderVisibleRows);
-});
-
-// Click on hex byte
-scrollContent.addEventListener('click', (e) => {
-  const target = e.target.closest('[data-offset]');
-  if (target) {
-    const offset = parseInt(target.dataset.offset, 10);
-    selectByte(offset);
+  if (state.activeView === 'binary') {
+    requestAnimationFrame(renderVisibleRows);
   }
 });
 
-// Endianness toggle
+scrollContent.addEventListener('click', (event) => {
+  const target = event.target.closest('[data-offset]');
+  if (target) {
+    selectByte(Number.parseInt(target.dataset.offset, 10));
+  }
+});
+
 $('#btn-le').addEventListener('click', () => {
   state.littleEndian = true;
   $('#btn-le').classList.add('active');
@@ -449,69 +572,74 @@ $('#btn-be').addEventListener('click', () => {
   if (state.cursor >= 0) updateInspector();
 });
 
-// Panel toggles
-$('#btn-toggle-inspector').addEventListener('click', () => {
-  const panel = $('#data-inspector');
-  panel.classList.toggle('collapsed');
-  $('#btn-toggle-inspector').classList.toggle('active');
+btnToggleInspector.addEventListener('click', () => {
+  dataInspector.classList.toggle('collapsed');
+  btnToggleInspector.classList.toggle('active');
 });
 
-// Keyboard navigation
-document.addEventListener('keydown', (e) => {
-  if (!state.fileData) return;
+btnViewText.addEventListener('click', () => setActiveView('text'));
+btnViewBinary.addEventListener('click', () => setActiveView('binary'));
+themeSelect.addEventListener('change', (event) => applyTheme(event.target.value));
+
+document.addEventListener('keydown', (event) => {
+  if (!state.fileData || state.activeView !== 'binary') return;
 
   const { cursor, bytesPerRow, fileSize } = state;
-  if (cursor < 0 && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+  if (cursor < 0 && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
     selectByte(0);
-    e.preventDefault();
+    event.preventDefault();
     return;
   }
 
-  switch (e.key) {
+  switch (event.key) {
     case 'ArrowRight':
-      e.preventDefault();
+      event.preventDefault();
       selectByte(Math.min(cursor + 1, fileSize - 1));
       break;
     case 'ArrowLeft':
-      e.preventDefault();
+      event.preventDefault();
       selectByte(Math.max(cursor - 1, 0));
       break;
     case 'ArrowDown':
-      e.preventDefault();
+      event.preventDefault();
       selectByte(Math.min(cursor + bytesPerRow, fileSize - 1));
       break;
     case 'ArrowUp':
-      e.preventDefault();
+      event.preventDefault();
       selectByte(Math.max(cursor - bytesPerRow, 0));
       break;
     case 'Escape':
       clearSelection();
       break;
     case 'Home':
-      e.preventDefault();
+      event.preventDefault();
       selectByte(0);
       break;
     case 'End':
-      e.preventDefault();
+      event.preventDefault();
       selectByte(fileSize - 1);
       break;
     case 'PageDown':
-      e.preventDefault();
+      event.preventDefault();
       selectByte(Math.min(cursor + bytesPerRow * 20, fileSize - 1));
       break;
     case 'PageUp':
-      e.preventDefault();
+      event.preventDefault();
       selectByte(Math.max(cursor - bytesPerRow * 20, 0));
+      break;
+    default:
       break;
   }
 });
 
-// Window resize
 window.addEventListener('resize', () => {
-  if (state.fileData) renderVisibleRows();
+  if (state.fileData && state.activeView === 'binary') {
+    renderVisibleRows();
+  }
 });
 
 // ─── Bootstrap ───────────────────────────────────────────────
+applyTheme(state.theme);
 initWasm().then(() => {
-  console.log('[QW] Hex Viewer ready');
+  console.log('[QW] WASM Viewer ready');
 });

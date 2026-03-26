@@ -19,6 +19,7 @@ DerivedData/
 .swiftpm/
 Packages/
 Package.resolved
+qw-wasm/target/
 
 # CocoaPods
 Pods/

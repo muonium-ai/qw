@@ -93,14 +93,14 @@ help:
 	@echo "$(YELLOW)Run Targets:$(NC)"
 	@echo "  make run          - Build and run GUI app on macOS"
 	@echo "  make run-cli      - Build and run CLI export tool (shows help)"
-	@echo "  make run-wasm     - Build WASM and launch hex viewer demo at localhost:8080"
-	@echo "  make run-wasm-dev - Launch hex viewer demo (JS-only, no WASM build needed)"
+	@echo "  make run-wasm     - Build WASM and launch the browser viewer at localhost:8080"
+	@echo "  make run-wasm-dev - Launch the browser viewer in JS-only mode at localhost:8080"
 	@echo "  make run-ios      - Run on iPad Simulator (alias for run-ipad)"
 	@echo "  make run-ipad     - Build and run on iPad Simulator"
 	@echo ""
 	@echo "$(YELLOW)Other Targets:$(NC)"
 	@echo "  make build-cli    - Build the qw-export CLI tool"
-	@echo "  make build-wasm   - Build the WASM hex viewer module"
+	@echo "  make build-wasm   - Build the WASM browser viewer module"
 	@echo "  make clean        - Clean all build artifacts"
 	@echo "  make test         - Run unit tests"
 	@echo "  make icons        - Generate app icons from qw_logo.png"
@@ -147,27 +147,27 @@ run-cli: build-cli
 	@cd $(QW_EXPORT_DIR) && .build/release/qw-export --help
 
 #------------------------------------------------------------------------------
-# Build WASM Hex Viewer
+# Build WASM Browser Viewer
 #------------------------------------------------------------------------------
 build-wasm:
-	@echo "$(YELLOW)Building WASM hex viewer...$(NC)"
+	@echo "$(YELLOW)Building WASM browser viewer...$(NC)"
 	@which wasm-pack > /dev/null || (echo "$(RED)Error: wasm-pack not found. Install with: cargo install wasm-pack$(NC)" && exit 1)
-	@cd qw-wasm && wasm-pack build --target web --release
+	@cd qw-wasm && PATH="$(HOME)/.cargo/bin:$$PATH" wasm-pack build --target web --release
 	@echo "$(GREEN)WASM build complete: qw-wasm/pkg/$(NC)"
 
 #------------------------------------------------------------------------------
-# Run WASM Hex Viewer Demo
+# Run WASM Browser Viewer Demo
 #------------------------------------------------------------------------------
 run-wasm: build-wasm
-	@echo "$(GREEN)Starting WASM hex viewer demo at http://localhost:8080$(NC)"
+	@echo "$(GREEN)Starting WASM browser viewer demo at http://localhost:8080$(NC)"
 	@echo "$(YELLOW)Press Ctrl+C to stop$(NC)"
 	@cd qw-wasm/www && python3 -m http.server 8080
 
 #------------------------------------------------------------------------------
-# Run WASM Hex Viewer Demo (JS-only mode, no WASM build required)
+# Run WASM Browser Viewer Demo (JS-only mode, no WASM build required)
 #------------------------------------------------------------------------------
 run-wasm-dev:
-	@echo "$(YELLOW)Starting hex viewer demo in JS-only mode (no WASM build)$(NC)"
+	@echo "$(YELLOW)Starting browser viewer demo in JS-only mode (no WASM build)$(NC)"
 	@echo "$(GREEN)Open http://localhost:8080 in your browser$(NC)"
 	@echo "$(YELLOW)Press Ctrl+C to stop$(NC)"
 	@cd qw-wasm/www && python3 -m http.server 8080

@@ -26,6 +26,11 @@ struct ExecutableRunnerView: View {
     let sandboxSummary: [String]
     var onSwitchToHex: (() -> Void)?
 
+    /// Optional async closure that performs the actual execution.
+    /// Called when the user confirms. Receives a `SandboxExecutor` for kill support.
+    /// Returns the `SandboxResult` when execution completes.
+    var onExecute: (@Sendable (SandboxExecutor) async -> SandboxResult)?
+
     @State private var state: ExecutionState = .confirming
     @State private var stdout: String = ""
     @State private var stderr: String = ""
@@ -34,6 +39,7 @@ struct ExecutableRunnerView: View {
     @State private var timedOut: Bool = false
     @State private var startTime: Date?
     @State private var timer: Timer?
+    @State private var executor: SandboxExecutor?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -116,9 +122,8 @@ struct ExecutableRunnerView: View {
 
     // MARK: - Execution lifecycle
 
-    /// Begin execution — transitions from confirming to running state.
-    /// The actual process spawning will be wired up in a future ticket;
-    /// this sets up the UI state and elapsed-time timer.
+    /// Begin execution — transitions from confirming to running state,
+    /// then invokes the `onExecute` closure if provided.
     private func beginExecution() {
         state = .running
         stdout = ""
@@ -135,6 +140,20 @@ struct ExecutableRunnerView: View {
             elapsedTime = Date().timeIntervalSince(start)
         }
         timer = t
+
+        // Launch actual execution if a closure was provided
+        if let onExecute = onExecute {
+            let exec = SandboxExecutor()
+            executor = exec
+            Task {
+                let result = await onExecute(exec)
+                await MainActor.run {
+                    stdout = result.stdout
+                    stderr = result.stderr
+                    markCompleted(exitCode: result.exitCode, timedOut: result.timedOut)
+                }
+            }
+        }
     }
 
     /// Mark execution as completed with the given results.
@@ -151,9 +170,7 @@ struct ExecutableRunnerView: View {
 
     /// Kill the running process.
     private func killProcess() {
-        // Actual process termination will be wired up in a future ticket.
-        // For now, transition to completed with a killed indicator.
-        markCompleted(exitCode: -1)
+        executor?.kill()
     }
 
     /// Append text to the stdout buffer (called from the process runner).

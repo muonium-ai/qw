@@ -25,6 +25,7 @@ struct DocumentEditorView: View {
     @State private var isImageMode: Bool = false
     @State private var isVideoMode: Bool = false
     @State private var isAudioMode: Bool = false
+    @State private var isExecutableMode: Bool = false
     @State private var showBinaryAlert: Bool = false
     @StateObject private var searchState = SearchState()
 
@@ -70,7 +71,7 @@ struct DocumentEditorView: View {
             mainContentView
         }
         #if os(macOS)
-        .background(WindowTitleModeUpdater(isReadOnly: isReadOnly, isHexMode: isHexMode, isImageMode: isImageMode, isVideoMode: isVideoMode, isAudioMode: isAudioMode))
+        .background(WindowTitleModeUpdater(isReadOnly: isReadOnly, isHexMode: isHexMode, isImageMode: isImageMode, isVideoMode: isVideoMode, isAudioMode: isAudioMode, isExecutableMode: isExecutableMode))
         #endif
         .onAppear {
             updateFileType()
@@ -136,6 +137,13 @@ struct DocumentEditorView: View {
                     isAudioMode = true
                 }
             }
+            if isExecutableFile(data: document.rawData) {
+                Button("Run in Sandbox") {
+                    isExecutableMode = true
+                    let detectedFormat = MagicBytes.detect(from: document.rawData)?.name
+                    FormatLogger.logOpenSuccess(fileURL: fileURL, formatName: detectedFormat, mode: "executable")
+                }
+            }
             #if os(macOS)
             if let url = fileURL {
                 Button("Preview (Quick Look)") {
@@ -184,6 +192,7 @@ struct DocumentEditorView: View {
             let isImageMode: Bool
             let isVideoMode: Bool
             let isAudioMode: Bool
+            let isExecutableMode: Bool
 
             func makeNSView(context: Context) -> NSView {
                 let view = NSView(frame: .zero)
@@ -210,6 +219,8 @@ struct DocumentEditorView: View {
                     modeText = "Video"
                 } else if isAudioMode {
                     modeText = "Audio"
+                } else if isExecutableMode {
+                    modeText = "Executable"
                 }
                 if #available(macOS 11.0, *) {
                     window.subtitle = modeText
@@ -220,7 +231,7 @@ struct DocumentEditorView: View {
             }
 
             private func stripModeSuffix(from title: String) -> String {
-                let suffixes = [" — Read Only", " — Write", " — Hex — Read Only", " — Hex — Write", " — Image", " — Video", " — Audio"]
+                let suffixes = [" — Read Only", " — Write", " — Hex — Read Only", " — Hex — Write", " — Image", " — Video", " — Audio", " — Executable"]
                 for suffix in suffixes where title.hasSuffix(suffix) {
                     return String(title.dropLast(suffix.count))
                 }
@@ -318,6 +329,8 @@ struct DocumentEditorView: View {
             videoPlayerContent(url: url)
         } else if isAudioMode && document.isBinaryDetected, let url = fileURL {
             audioPlayerContent(url: url)
+        } else if isExecutableMode && document.isBinaryDetected, let url = fileURL {
+            executableRunnerContent(url: url)
         } else {
             CodeEditorView(
                 text: $document.text,
@@ -387,11 +400,34 @@ struct DocumentEditorView: View {
         return audioKeywords.contains(where: { name.contains($0) })
     }
 
+    /// Returns `true` when the data's magic bytes indicate an executable format (WASM only for now).
+    private func isExecutableFile(data: Data) -> Bool {
+        guard let sig = MagicBytes.detect(from: data) else { return false }
+        return sig.name.contains("WebAssembly")
+    }
+
+    /// Executable runner view with WasmRunner integration.
+    @ViewBuilder
+    private func executableRunnerContent(url: URL) -> some View {
+        #if os(macOS)
+        WasmExecutionView(
+            fileURL: url,
+            rawData: document.rawData,
+            onSwitchToHex: { switchToHexMode() }
+        )
+        .accessibilityIdentifier("executableRunner")
+        #else
+        Text("Executable running is not supported on this platform.")
+            .foregroundColor(.secondary)
+        #endif
+    }
+
     /// Switches to hex mode from any media viewer.
     private func switchToHexMode() {
         isImageMode = false
         isVideoMode = false
         isAudioMode = false
+        isExecutableMode = false
         isHexMode = true
     }
 

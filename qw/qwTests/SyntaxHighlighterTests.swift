@@ -62,10 +62,9 @@ final class SyntaxHighlighterTests: XCTestCase {
     }
 
     func testCommentShouldNotContainStringTokens_JavaScript() throws {
-        throw XCTSkip("Crashes in test runner on macOS 26 — SyntaxHighlighter class dealloc triggers memory corruption")
         let text = "// \"string inside comment\""
-        let highlighter = SyntaxHighlighter(fileType: .javascript, theme: .dark)
-        let tokens = highlighter.tokenize(text)
+        let tokenizer = SyntaxTokenizer(fileType: .javascript)
+        let tokens = tokenizer.tokenize(text)
 
         let commentRanges = tokens.filter { $0.type == .comment }.map { $0.range }
         let stringRanges = tokens.filter { $0.type == .string }.map { $0.range }
@@ -78,11 +77,9 @@ final class SyntaxHighlighterTests: XCTestCase {
     }
 
     func testCommentShouldNotContainStringTokens_Python() throws {
-        // Crashes in test runner due to memory corruption on macOS 26
-        throw XCTSkip("Crashes in test runner on macOS 26 — tokenize triggers memory corruption")
         let text = "# 'string inside comment'"
-        let highlighter = SyntaxHighlighter(fileType: .python, theme: .dark)
-        let tokens = highlighter.tokenize(text)
+        let tokenizer = SyntaxTokenizer(fileType: .python)
+        let tokens = tokenizer.tokenize(text)
 
         let commentRanges = tokens.filter { $0.type == .comment }.map { $0.range }
         let stringRanges = tokens.filter { $0.type == .string }.map { $0.range }

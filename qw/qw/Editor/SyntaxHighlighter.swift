@@ -33,6 +33,110 @@ struct Token {
     let type: TokenType
 }
 
+/// Pure tokenization engine shared by SyntaxHighlighter and tests.
+struct SyntaxTokenizer {
+    let fileType: SupportedFileType
+    let fileName: String?
+
+    init(fileType: SupportedFileType, fileName: String? = nil) {
+        self.fileType = fileType
+        self.fileName = fileName
+    }
+
+    func tokenize(_ text: String) -> [Token] {
+        guard let lexer = makeLexer() else { return [] }
+        let pygmentsTokens = lexer.getTokens(text)
+        if pygmentsTokens.isEmpty { return [] }
+
+        let totalLength = text.utf16.count
+
+        let allTokens: [Token] = pygmentsTokens.compactMap { token in
+            let length = token.value.utf16.count
+            guard length > 0 else { return nil }
+            let end = token.start + length
+            guard token.start >= 0, end <= totalLength else { return nil }
+            let nsRange = NSRange(location: token.start, length: length)
+            guard let range = Range(nsRange, in: text) else { return nil }
+            return Token(range: range, type: mapTokenType(token.type))
+        }
+
+        let commentRanges = allTokens.filter { $0.type == .comment }.map { $0.range }
+
+        return allTokens.filter { token in
+            if token.type == .comment { return true }
+            return !commentRanges.contains { commentRange in
+                token.range.lowerBound < commentRange.upperBound &&
+                commentRange.lowerBound < token.range.upperBound
+            }
+        }
+    }
+
+    private func makeLexer() -> PygmentsSwift.Lexer? {
+        if let fileName, let lexer = PygmentsSwift.LexerRegistry.makeLexer(filename: fileName) {
+            return lexer
+        }
+
+        if let languageName = languageNameForFileType(),
+           let lexer = PygmentsSwift.LexerRegistry.makeLexer(languageName: languageName) {
+            return lexer
+        }
+
+        let fallbackName = "file.\(fileType.rawValue)"
+        return PygmentsSwift.LexerRegistry.makeLexer(filename: fallbackName)
+    }
+
+    private func languageNameForFileType() -> String? {
+        switch fileType {
+        case .plainText:
+            return nil
+        case .markdown:
+            return "markdown"
+        case .json:
+            return "json"
+        case .yaml, .yml:
+            return "yaml"
+        case .python:
+            return "python"
+        case .javascript:
+            return "javascript"
+        case .html:
+            return "html"
+        case .css:
+            return "css"
+        case .swift:
+            return "swift"
+        }
+    }
+
+    private func mapTokenType(_ type: PygmentsSwift.TokenType) -> TokenType {
+        if type.isSubtype(of: .comment) { return .comment }
+        if type.isSubtype(of: .string) { return .string }
+        if type.isSubtype(of: .number) { return .number }
+        if type.isSubtype(of: .keyword) { return .keyword }
+
+        if type.isSubtype(of: .name.child("Function")) { return .function }
+        if type.isSubtype(of: .name.child("Class")) { return .type }
+        if type.isSubtype(of: .keyword.child("Type")) { return .type }
+
+        if type.isSubtype(of: .name.child("Attribute")) { return .attribute }
+        if type.isSubtype(of: .name.child("Tag")) { return .tag }
+        if type.isSubtype(of: .name.child("Decorator")) { return .attribute }
+
+        if type.isSubtype(of: .name.child("Variable")) { return .property }
+        if type.isSubtype(of: .name.child("Property")) { return .property }
+        if type.isSubtype(of: .name.child("Builtin")) { return .property }
+        if type.isSubtype(of: .name) { return .property }
+
+        if type.isSubtype(of: .punctuation) { return .punctuation }
+        if type.isSubtype(of: .operator) { return .punctuation }
+
+        if type.isSubtype(of: .text) { return .plain }
+        if type.isSubtype(of: .whitespace) { return .plain }
+
+        return .plain
+    }
+}
+
 /// Theme colors for syntax highlighting
 struct SyntaxTheme {
     let plain: Color
@@ -277,6 +381,10 @@ class SyntaxHighlighter {
     let theme: SyntaxTheme
     let fileName: String?
 
+    private var tokenizer: SyntaxTokenizer {
+        SyntaxTokenizer(fileType: fileType, fileName: fileName)
+    }
+
     init(fileType: SupportedFileType, theme: SyntaxTheme, fileName: String? = nil) {
         self.fileType = fileType
         self.theme = theme
@@ -311,97 +419,6 @@ class SyntaxHighlighter {
 
     /// Tokenize text using PygmentsSwift
     func tokenize(_ text: String) -> [Token] {
-        guard let lexer = makeLexer() else { return [] }
-        let pygmentsTokens = lexer.getTokens(text)
-        if pygmentsTokens.isEmpty { return [] }
-
-        let totalLength = text.utf16.count
-
-        let allTokens: [Token] = pygmentsTokens.compactMap { token in
-            let length = token.value.utf16.count
-            guard length > 0 else { return nil }
-            let end = token.start + length
-            guard token.start >= 0, end <= totalLength else { return nil }
-            let nsRange = NSRange(location: token.start, length: length)
-            guard let range = Range(nsRange, in: text) else { return nil }
-            return Token(range: range, type: mapTokenType(token.type))
-        }
-
-        // Collect comment ranges so we can suppress tokens that overlap them
-        let commentRanges = allTokens.filter { $0.type == .comment }.map { $0.range }
-
-        return allTokens.filter { token in
-            if token.type == .comment { return true }
-            // Drop non-comment tokens whose range overlaps any comment range
-            return !commentRanges.contains { commentRange in
-                token.range.lowerBound < commentRange.upperBound &&
-                commentRange.lowerBound < token.range.upperBound
-            }
-        }
-    }
-
-    private func makeLexer() -> PygmentsSwift.Lexer? {
-        if let fileName, let lexer = PygmentsSwift.LexerRegistry.makeLexer(filename: fileName) {
-            return lexer
-        }
-
-        if let languageName = languageNameForFileType(),
-           let lexer = PygmentsSwift.LexerRegistry.makeLexer(languageName: languageName) {
-            return lexer
-        }
-
-        let fallbackName = "file.\(fileType.rawValue)"
-        return PygmentsSwift.LexerRegistry.makeLexer(filename: fallbackName)
-    }
-
-    private func languageNameForFileType() -> String? {
-        switch fileType {
-        case .plainText:
-            return nil
-        case .markdown:
-            return "markdown"
-        case .json:
-            return "json"
-        case .yaml, .yml:
-            return "yaml"
-        case .python:
-            return "python"
-        case .javascript:
-            return "javascript"
-        case .html:
-            return "html"
-        case .css:
-            return "css"
-        case .swift:
-            return "swift"
-        }
-    }
-
-    private func mapTokenType(_ type: PygmentsSwift.TokenType) -> TokenType {
-        if type.isSubtype(of: .comment) { return .comment }
-        if type.isSubtype(of: .string) { return .string }
-        if type.isSubtype(of: .number) { return .number }
-        if type.isSubtype(of: .keyword) { return .keyword }
-
-        if type.isSubtype(of: .name.child("Function")) { return .function }
-        if type.isSubtype(of: .name.child("Class")) { return .type }
-        if type.isSubtype(of: .keyword.child("Type")) { return .type }
-
-        if type.isSubtype(of: .name.child("Attribute")) { return .attribute }
-        if type.isSubtype(of: .name.child("Tag")) { return .tag }
-        if type.isSubtype(of: .name.child("Decorator")) { return .attribute }
-
-        if type.isSubtype(of: .name.child("Variable")) { return .property }
-        if type.isSubtype(of: .name.child("Property")) { return .property }
-        if type.isSubtype(of: .name.child("Builtin")) { return .property }
-        if type.isSubtype(of: .name) { return .property }
-
-        if type.isSubtype(of: .punctuation) { return .punctuation }
-        if type.isSubtype(of: .operator) { return .punctuation }
-
-        if type.isSubtype(of: .text) { return .plain }
-        if type.isSubtype(of: .whitespace) { return .plain }
-
-        return .plain
+        tokenizer.tokenize(text)
     }
 }

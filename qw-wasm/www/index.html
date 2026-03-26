@@ -21,9 +21,7 @@
       <span id="file-rows-info"></span>
     </div>
     <div class="toolbar-right">
-      <button id="btn-ai-explain" title="Explain file structure with AI" disabled>Explain with AI</button>
       <button id="btn-toggle-inspector" title="Toggle data inspector" class="active">Inspector</button>
-      <button id="btn-toggle-ai-panel" title="Toggle AI panel">AI Panel</button>
     </div>
   </header>
 
@@ -64,16 +62,6 @@
         </div>
       </aside>
 
-      <!-- AI panel (collapsible right sidebar) -->
-      <aside id="ai-panel" class="side-panel collapsed">
-        <div class="panel-header">
-          <span>AI Analysis</span>
-          <button id="btn-close-ai-panel" title="Close">&times;</button>
-        </div>
-        <div id="ai-panel-content" class="panel-body">
-          <p class="inspector-placeholder">Click "Explain with AI" to analyze this file</p>
-        </div>
-      </aside>
     </div>
   </main>
 
@@ -84,20 +72,6 @@
     <span id="status-cursor-offset"></span>
     <span id="status-detected-type"></span>
   </footer>
-
-  <!-- AI API key modal -->
-  <div id="api-key-modal" class="modal hidden">
-    <div class="modal-backdrop"></div>
-    <div class="modal-content">
-      <h3>Claude API Key</h3>
-      <p>Enter your Anthropic API key to use AI analysis.</p>
-      <input type="password" id="api-key-input" placeholder="sk-ant-..." autocomplete="off">
-      <div class="modal-actions">
-        <button id="btn-cancel-api-key">Cancel</button>
-        <button id="btn-save-api-key" class="primary">Save &amp; Explain</button>
-      </div>
-    </div>
-  </div>
 
   <script type="module" src="app.js"></script>
 </body>

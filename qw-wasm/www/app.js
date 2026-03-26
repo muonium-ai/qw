@@ -27,7 +27,6 @@ const scrollContainer = $('#hex-scroll-container');
 const scrollContent  = $('#hex-scroll-content');
 const hexHeader      = $('#hex-header');
 const inspectorEl    = $('#inspector-content');
-const aiPanelContent = $('#ai-panel-content');
 const statusFileName = $('#status-file-name');
 const statusFileSize = $('#status-file-size');
 const statusCursor   = $('#status-cursor-offset');
@@ -35,8 +34,6 @@ const statusType     = $('#status-detected-type');
 const fileTypeBadge  = $('#file-type-badge');
 const fileSizeInfo   = $('#file-size-info');
 const fileRowsInfo   = $('#file-rows-info');
-const apiKeyModal    = $('#api-key-modal');
-const apiKeyInput    = $('#api-key-input');
 const fileInput      = $('#file-input');
 
 // ─── Init WASM ───────────────────────────────────────────────
@@ -195,7 +192,6 @@ function loadFile(file) {
     buildHeader();
     renderVisibleRows();
 
-    $('#btn-ai-explain').disabled = false;
   };
   reader.readAsArrayBuffer(file);
 }
@@ -396,102 +392,6 @@ function updateInspector() {
   inspectorEl.innerHTML = html;
 }
 
-// ─── AI Explain ──────────────────────────────────────────────
-function showApiKeyModal() {
-  const savedKey = localStorage.getItem('qw_claude_api_key') || '';
-  apiKeyInput.value = savedKey;
-  apiKeyModal.classList.remove('hidden');
-  apiKeyInput.focus();
-}
-
-function hideApiKeyModal() {
-  apiKeyModal.classList.add('hidden');
-}
-
-async function aiExplain(apiKey) {
-  if (!state.fileData) return;
-
-  // Store key
-  localStorage.setItem('qw_claude_api_key', apiKey);
-
-  // Open AI panel
-  $('#ai-panel').classList.remove('collapsed');
-  $('#btn-toggle-ai-panel').classList.add('active');
-
-  // Build hex string of first 256 bytes
-  const sample = state.fileData.slice(0, Math.min(256, state.fileData.length));
-  let hexStr = '';
-  for (let i = 0; i < sample.length; i++) {
-    hexStr += sample[i].toString(16).padStart(2, '0');
-    if ((i + 1) % 16 === 0) hexStr += '\n';
-    else hexStr += ' ';
-  }
-
-  aiPanelContent.innerHTML = '<span class="ai-loading">Analyzing file...</span>';
-
-  try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1024,
-        stream: true,
-        system: 'You are a binary file analyst. Explain the structure of this file based on its hex bytes and detected type. Be concise.',
-        messages: [{
-          role: 'user',
-          content: `File: ${state.fileName}\nDetected type: ${state.fileType}\nSize: ${formatSize(state.fileSize)}\n\nFirst ${sample.length} bytes (hex):\n${hexStr}\n\nExplain the structure of this file.`,
-        }],
-      }),
-    });
-
-    if (!response.ok) {
-      const errBody = await response.text();
-      aiPanelContent.textContent = `API Error ${response.status}: ${errBody}`;
-      return;
-    }
-
-    // Stream response
-    aiPanelContent.textContent = '';
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-
-      // Parse SSE events
-      const lines = buffer.split('\n');
-      buffer = lines.pop(); // keep incomplete line
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6).trim();
-          if (data === '[DONE]') continue;
-          try {
-            const event = JSON.parse(data);
-            if (event.type === 'content_block_delta' && event.delta?.text) {
-              aiPanelContent.textContent += event.delta.text;
-              aiPanelContent.scrollTop = aiPanelContent.scrollHeight;
-            }
-          } catch {
-            // skip unparseable lines
-          }
-        }
-      }
-    }
-  } catch (err) {
-    aiPanelContent.textContent = 'Error: ' + err.message;
-  }
-}
-
 // ─── Event handlers ──────────────────────────────────────────
 
 // Drag & drop
@@ -556,43 +456,9 @@ $('#btn-toggle-inspector').addEventListener('click', () => {
   $('#btn-toggle-inspector').classList.toggle('active');
 });
 
-$('#btn-toggle-ai-panel').addEventListener('click', () => {
-  const panel = $('#ai-panel');
-  panel.classList.toggle('collapsed');
-  $('#btn-toggle-ai-panel').classList.toggle('active');
-});
-
-$('#btn-close-ai-panel').addEventListener('click', () => {
-  $('#ai-panel').classList.add('collapsed');
-  $('#btn-toggle-ai-panel').classList.remove('active');
-});
-
-// AI explain
-$('#btn-ai-explain').addEventListener('click', () => {
-  const key = localStorage.getItem('qw_claude_api_key');
-  if (key) {
-    aiExplain(key);
-  } else {
-    showApiKeyModal();
-  }
-});
-
-$('#btn-save-api-key').addEventListener('click', () => {
-  const key = apiKeyInput.value.trim();
-  if (key) {
-    hideApiKeyModal();
-    aiExplain(key);
-  }
-});
-
-$('#btn-cancel-api-key').addEventListener('click', hideApiKeyModal);
-
-$('.modal-backdrop')?.addEventListener('click', hideApiKeyModal);
-
 // Keyboard navigation
 document.addEventListener('keydown', (e) => {
   if (!state.fileData) return;
-  if (apiKeyModal && !apiKeyModal.classList.contains('hidden')) return;
 
   const { cursor, bytesPerRow, fileSize } = state;
   if (cursor < 0 && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {

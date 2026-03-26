@@ -16,6 +16,8 @@ import AppKit
 struct ImageViewerView: View {
     let data: Data
     var fileURL: URL?
+    var onSwitchToHex: (() -> Void)?
+    var onOpenExternal: (() -> Void)?
 
     // MARK: - State
 
@@ -88,13 +90,39 @@ struct ImageViewerView: View {
                     }
                 }
             } else {
-                VStack(spacing: 12) {
+                VStack(spacing: 16) {
                     Image(systemName: "photo.badge.exclamationmark")
                         .font(.system(size: 48))
                         .foregroundStyle(.secondary)
-                    Text("Unable to load image")
+                    Text("Unable to load this image")
                         .font(.headline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.white)
+                    Text("The image format may not be supported by the built-in viewer.")
+                        .font(.caption)
+                        .foregroundStyle(.gray)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+
+                    HStack(spacing: 12) {
+                        if let url = fileURL {
+                            Button("Open in Default App") {
+                                if let action = onOpenExternal {
+                                    action()
+                                } else {
+                                    NSWorkspace.shared.open(url)
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+
+                        if let onSwitchToHex {
+                            Button("View in Hex Mode") {
+                                onSwitchToHex()
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                    .padding(.top, 4)
                 }
             }
 
@@ -110,6 +138,13 @@ struct ImageViewerView: View {
             // Start at fit-to-window
             zoomScale = 1.0
             lastZoomScale = 1.0
+
+            // Log format open result (T-000054)
+            if nsImage != nil {
+                FormatLogger.logOpenSuccess(fileURL: fileURL, formatName: formatName, mode: "image")
+            } else {
+                FormatLogger.logOpenFailure(fileURL: fileURL, formatName: formatName, mode: "image", error: "NSImage(data:) returned nil")
+            }
         }
         .accessibilityIdentifier("imageViewer")
     }

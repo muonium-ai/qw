@@ -18,11 +18,15 @@ import Combine
 /// A SwiftUI video player view with custom overlay controls.
 struct VideoPlayerView: View {
     let fileURL: URL
+    var onSwitchToHex: (() -> Void)?
+    var onOpenExternal: (() -> Void)?
 
     @StateObject private var controller: VideoPlayerController
 
-    init(fileURL: URL) {
+    init(fileURL: URL, onSwitchToHex: (() -> Void)? = nil, onOpenExternal: (() -> Void)? = nil) {
         self.fileURL = fileURL
+        self.onSwitchToHex = onSwitchToHex
+        self.onOpenExternal = onOpenExternal
         _controller = StateObject(wrappedValue: VideoPlayerController(url: fileURL))
     }
 
@@ -78,11 +82,11 @@ struct VideoPlayerView: View {
     // MARK: - Error view
 
     private var videoErrorView: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 16) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 48))
-                .foregroundColor(.yellow)
-            Text("Unable to play video")
+                .foregroundStyle(.secondary)
+            Text("Unable to play this video")
                 .font(.headline)
                 .foregroundColor(.white)
             Text(controller.errorMessage)
@@ -90,6 +94,28 @@ struct VideoPlayerView: View {
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
+            Text("The format may not be supported by the built-in player.")
+                .font(.caption2)
+                .foregroundColor(.gray)
+
+            HStack(spacing: 12) {
+                Button("Open in Default App") {
+                    if let action = onOpenExternal {
+                        action()
+                    } else {
+                        NSWorkspace.shared.open(fileURL)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+
+                if let onSwitchToHex {
+                    Button("View in Hex Mode") {
+                        onSwitchToHex()
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+            .padding(.top, 4)
         }
     }
 
@@ -281,11 +307,15 @@ final class VideoPlayerController: ObservableObject {
     private var statusObservation: NSKeyValueObservation?
     private var rateObservation: NSKeyValueObservation?
 
+    private let fileURL: URL
+
     init(url: URL) {
+        self.fileURL = url
         guard FileManager.default.fileExists(atPath: url.path) else {
             self.player = AVPlayer()
             self.hasError = true
             self.errorMessage = "File not found: \(url.lastPathComponent)"
+            FormatLogger.logOpenFailure(fileURL: url, formatName: nil, mode: "video", error: "File not found")
             return
         }
 
@@ -329,9 +359,11 @@ final class VideoPlayerController: ObservableObject {
                     if dur.isFinite {
                         self.duration = dur
                     }
+                    FormatLogger.logOpenSuccess(fileURL: self.fileURL, formatName: nil, mode: "video")
                 case .failed:
                     self.hasError = true
                     self.errorMessage = item.error?.localizedDescription ?? "Unknown playback error"
+                    FormatLogger.logOpenFailure(fileURL: self.fileURL, formatName: nil, mode: "video", error: self.errorMessage)
                 default:
                     break
                 }

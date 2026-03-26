@@ -9,10 +9,15 @@
 import SwiftUI
 import AVFoundation
 import Combine
+#if os(macOS)
+import AppKit
+#endif
 
 /// A minimal audio player view for binary audio files.
 struct AudioPlayerView: View {
     let fileURL: URL
+    var onSwitchToHex: (() -> Void)?
+    var onOpenExternal: (() -> Void)?
 
     @StateObject private var controller = AudioPlayerController()
 
@@ -20,90 +25,11 @@ struct AudioPlayerView: View {
         VStack(spacing: 0) {
             Spacer()
 
-            VStack(spacing: 20) {
-                // Large icon
-                Image(systemName: "waveform.circle.fill")
-                    .font(.system(size: 80))
-                    .foregroundStyle(.secondary)
-
-                // Filename
-                Text(fileURL.lastPathComponent)
-                    .font(.title2)
-                    .fontWeight(.medium)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-
-                // Error message
-                if let error = controller.errorMessage {
-                    Text(error)
-                        .font(.callout)
-                        .foregroundStyle(.red)
-                        .padding(.horizontal)
-                }
-
-                // Seek bar with time labels
-                VStack(spacing: 4) {
-                    Slider(
-                        value: Binding(
-                            get: { controller.currentTime },
-                            set: { controller.seek(to: $0) }
-                        ),
-                        in: 0...max(controller.duration, 0.01)
-                    )
-                    .disabled(controller.duration == 0)
-
-                    HStack {
-                        Text(formatTime(controller.currentTime))
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text(formatTime(controller.duration))
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(.horizontal, 20)
-
-                // Play/Pause button
-                Button(action: { controller.togglePlayPause() }) {
-                    Image(systemName: controller.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                        .font(.system(size: 56))
-                        .symbolRenderingMode(.hierarchical)
-                }
-                .buttonStyle(.plain)
-                .disabled(controller.errorMessage != nil)
-                .keyboardShortcut(.space, modifiers: [])
-
-                // Speed control
-                HStack(spacing: 12) {
-                    Text("Speed")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    Picker("Speed", selection: $controller.playbackSpeed) {
-                        Text("1\u{00D7}").tag(Float(1.0))
-                        Text("1.25\u{00D7}").tag(Float(1.25))
-                        Text("1.5\u{00D7}").tag(Float(1.5))
-                        Text("2\u{00D7}").tag(Float(2.0))
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: 260)
-                }
-
-                // Volume control
-                HStack(spacing: 8) {
-                    Button(action: { controller.toggleMute() }) {
-                        Image(systemName: controller.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                            .frame(width: 20)
-                    }
-                    .buttonStyle(.plain)
-                    .help(controller.isMuted ? "Unmute" : "Mute")
-
-                    Slider(value: $controller.volume, in: 0...1)
-                        .frame(maxWidth: 200)
-                }
+            if controller.errorMessage != nil {
+                audioErrorView
+            } else {
+                audioControlsView
             }
-            .frame(maxWidth: 400)
-            .padding(32)
 
             Spacer()
         }
@@ -114,6 +40,131 @@ struct AudioPlayerView: View {
         .onDisappear {
             controller.cleanup()
         }
+    }
+
+    // MARK: - Error fallback view
+
+    private var audioErrorView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 48))
+                .foregroundStyle(.secondary)
+            Text("Unable to play this audio file")
+                .font(.headline)
+            if let error = controller.errorMessage {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+            }
+            Text("The format may not be supported by the built-in player.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 12) {
+                Button("Open in Default App") {
+                    if let action = onOpenExternal {
+                        action()
+                    } else {
+                        #if os(macOS)
+                        NSWorkspace.shared.open(fileURL)
+                        #endif
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+
+                if let onSwitchToHex {
+                    Button("View in Hex Mode") {
+                        onSwitchToHex()
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+            .padding(.top, 4)
+        }
+        .frame(maxWidth: 400)
+        .padding(32)
+    }
+
+    // MARK: - Normal controls view
+
+    private var audioControlsView: some View {
+        VStack(spacing: 20) {
+            // Large icon
+            Image(systemName: "waveform.circle.fill")
+                .font(.system(size: 80))
+                .foregroundStyle(.secondary)
+
+            // Filename
+            Text(fileURL.lastPathComponent)
+                .font(.title2)
+                .fontWeight(.medium)
+                .lineLimit(1)
+                .truncationMode(.middle)
+
+            // Seek bar with time labels
+            VStack(spacing: 4) {
+                Slider(
+                    value: Binding(
+                        get: { controller.currentTime },
+                        set: { controller.seek(to: $0) }
+                    ),
+                    in: 0...max(controller.duration, 0.01)
+                )
+                .disabled(controller.duration == 0)
+
+                HStack {
+                    Text(formatTime(controller.currentTime))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(formatTime(controller.duration))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 20)
+
+            // Play/Pause button
+            Button(action: { controller.togglePlayPause() }) {
+                Image(systemName: controller.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                    .font(.system(size: 56))
+                    .symbolRenderingMode(.hierarchical)
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut(.space, modifiers: [])
+
+            // Speed control
+            HStack(spacing: 12) {
+                Text("Speed")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Picker("Speed", selection: $controller.playbackSpeed) {
+                    Text("1\u{00D7}").tag(Float(1.0))
+                    Text("1.25\u{00D7}").tag(Float(1.25))
+                    Text("1.5\u{00D7}").tag(Float(1.5))
+                    Text("2\u{00D7}").tag(Float(2.0))
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 260)
+            }
+
+            // Volume control
+            HStack(spacing: 8) {
+                Button(action: { controller.toggleMute() }) {
+                    Image(systemName: controller.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                        .frame(width: 20)
+                }
+                .buttonStyle(.plain)
+                .help(controller.isMuted ? "Unmute" : "Mute")
+
+                Slider(value: $controller.volume, in: 0...1)
+                    .frame(maxWidth: 200)
+            }
+        }
+        .frame(maxWidth: 400)
+        .padding(32)
     }
 
     private func formatTime(_ seconds: Double) -> String {
@@ -159,10 +210,15 @@ final class AudioPlayerController: ObservableObject {
     private var player: AVPlayer?
     private var timeObserver: Any?
     private var endObserver: NSObjectProtocol?
+    private var statusObservation: NSKeyValueObservation?
+
+    private var loadedURL: URL?
 
     func load(url: URL) {
+        loadedURL = url
         guard FileManager.default.fileExists(atPath: url.path) else {
             errorMessage = "File not found."
+            FormatLogger.logOpenFailure(fileURL: url, formatName: nil, mode: "audio", error: "File not found")
             return
         }
 
@@ -172,6 +228,17 @@ final class AudioPlayerController: ObservableObject {
         avPlayer.volume = isMuted ? 0 : volume
         self.player = avPlayer
 
+        // Observe player item status for playback failures
+        statusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if item.status == .failed {
+                    self.errorMessage = item.error?.localizedDescription ?? "Unknown playback error"
+                    FormatLogger.logOpenFailure(fileURL: self.loadedURL, formatName: nil, mode: "audio", error: self.errorMessage ?? "Unknown")
+                }
+            }
+        }
+
         // Observe duration once ready
         Task { @MainActor in
             do {
@@ -180,8 +247,10 @@ final class AudioPlayerController: ObservableObject {
                 if seconds.isFinite && seconds > 0 {
                     self.duration = seconds
                 }
+                FormatLogger.logOpenSuccess(fileURL: self.loadedURL, formatName: nil, mode: "audio")
             } catch {
                 self.errorMessage = "Unable to load audio: \(error.localizedDescription)"
+                FormatLogger.logOpenFailure(fileURL: self.loadedURL, formatName: nil, mode: "audio", error: error.localizedDescription)
             }
         }
 
@@ -237,6 +306,8 @@ final class AudioPlayerController: ObservableObject {
             NotificationCenter.default.removeObserver(observer)
             endObserver = nil
         }
+        statusObservation?.invalidate()
+        statusObservation = nil
         player?.pause()
         player = nil
         isPlaying = false

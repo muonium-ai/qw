@@ -94,14 +94,19 @@ struct DocumentEditorView: View {
 
             // Auto-detect binary files: open images/videos/audio directly, prompt for others
             if document.isBinaryDetected {
+                let detectedFormat = MagicBytes.detect(from: document.rawData)?.name
                 if isImageFile(data: document.rawData) {
                     isImageMode = true
+                    FormatLogger.logOpenSuccess(fileURL: fileURL, formatName: detectedFormat, mode: "image")
                 } else if isVideoFile(data: document.rawData) {
                     isVideoMode = true
+                    FormatLogger.logOpenSuccess(fileURL: fileURL, formatName: detectedFormat, mode: "video")
                 } else if isAudioFile(data: document.rawData) {
                     isAudioMode = true
+                    FormatLogger.logOpenSuccess(fileURL: fileURL, formatName: detectedFormat, mode: "audio")
                 } else {
                     showBinaryAlert = true
+                    FormatLogger.logOpenFailure(fileURL: fileURL, formatName: detectedFormat, mode: "text", error: "Binary file detected, prompting user for mode selection")
                 }
             }
         }
@@ -302,8 +307,13 @@ struct DocumentEditorView: View {
             HexView(data: document.rawData, fileURL: fileURL)
                 .accessibilityIdentifier("hexViewer")
         } else if isImageMode && document.isBinaryDetected {
-            ImageViewerView(data: document.rawData, fileURL: fileURL)
-                .accessibilityIdentifier("imageViewer")
+            ImageViewerView(
+                data: document.rawData,
+                fileURL: fileURL,
+                onSwitchToHex: { switchToHexMode() },
+                onOpenExternal: fileURL.map { url in { openInDefaultApp(url: url) } }
+            )
+            .accessibilityIdentifier("imageViewer")
         } else if isVideoMode && document.isBinaryDetected, let url = fileURL {
             videoPlayerContent(url: url)
         } else if isAudioMode && document.isBinaryDetected, let url = fileURL {
@@ -331,8 +341,12 @@ struct DocumentEditorView: View {
     @ViewBuilder
     private func videoPlayerContent(url: URL) -> some View {
         #if os(macOS)
-        VideoPlayerView(fileURL: url)
-            .accessibilityIdentifier("videoPlayer")
+        VideoPlayerView(
+            fileURL: url,
+            onSwitchToHex: { switchToHexMode() },
+            onOpenExternal: { NSWorkspace.shared.open(url) }
+        )
+        .accessibilityIdentifier("videoPlayer")
         #else
         Text("Video playback is not supported on this platform.")
             .foregroundColor(.secondary)
@@ -351,8 +365,12 @@ struct DocumentEditorView: View {
     @ViewBuilder
     private func audioPlayerContent(url: URL) -> some View {
         #if os(macOS)
-        AudioPlayerView(fileURL: url)
-            .accessibilityIdentifier("audioPlayer")
+        AudioPlayerView(
+            fileURL: url,
+            onSwitchToHex: { switchToHexMode() },
+            onOpenExternal: { NSWorkspace.shared.open(url) }
+        )
+        .accessibilityIdentifier("audioPlayer")
         #else
         Text("Audio playback is not supported on this platform.")
             .foregroundColor(.secondary)
@@ -367,6 +385,21 @@ struct DocumentEditorView: View {
         if isVideoFile(data: data) { return false }
         let audioKeywords = ["WAV", "RIFF", "MP3", "FLAC", "OGG", "AAC", "M4A", "AIFF", "MIDI", "Audio", "Opus"]
         return audioKeywords.contains(where: { name.contains($0) })
+    }
+
+    /// Switches to hex mode from any media viewer.
+    private func switchToHexMode() {
+        isImageMode = false
+        isVideoMode = false
+        isAudioMode = false
+        isHexMode = true
+    }
+
+    /// Opens the given URL in the system default app.
+    private func openInDefaultApp(url: URL) {
+        #if os(macOS)
+        NSWorkspace.shared.open(url)
+        #endif
     }
 
     private func updateFileType() {

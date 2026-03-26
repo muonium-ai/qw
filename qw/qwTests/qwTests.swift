@@ -5,12 +5,13 @@
 //  Created by Senthil Nayagam on 10/01/26.
 //
 
-import Testing
+import XCTest
+@testable import qw
 
-struct qwTests {
+final class qwTests: XCTestCase {
 
-    @Test func example() async throws {
-        // Write your test here and use APIs like `#expect(...)` to check expected conditions.
+    func testSupportedFileTypePlainTextExists() {
+        // Smoke test: verify the plain text file type is accessible
+        XCTAssertEqual(SupportedFileType.plainText.rawValue, "txt")
     }
-
 }

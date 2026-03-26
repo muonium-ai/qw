@@ -342,12 +342,16 @@ struct HexView: View {
                         sectionLegendView
                     }
                 }
-                if showDataInspector && selectionStart != nil {
+                if showDataInspector {
                     Divider()
                     DataInspectorView(
                         data: displayData,
                         cursorOffset: selectionStart,
-                        isLittleEndian: $isLittleEndian
+                        isLittleEndian: $isLittleEndian,
+                        fileURL: fileURL,
+                        fileSize: displayData.count,
+                        detectedFormat: detectedFileType?.name,
+                        detectedCategory: detectedFileCategoryName
                     )
                 }
                 if showAnnotationPanel {
@@ -493,6 +497,11 @@ struct HexView: View {
     /// Detected file type from magic bytes, if any.
     private var detectedFileType: FileSignature? {
         MagicBytes.detect(from: displayData)
+    }
+
+    /// Category name from the format database, if available.
+    private var detectedFileCategoryName: String? {
+        FormatDatabase.shared.detectSignature(from: displayData)?.category
     }
 
     private var statusBar: some View {

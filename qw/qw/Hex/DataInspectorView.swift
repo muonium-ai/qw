@@ -8,18 +8,31 @@
 
 import SwiftUI
 
-/// Displays the bytes at a given cursor offset decoded as multiple numeric,
-/// text, and floating-point types. Shown as a right-side panel in the hex view.
+/// Displays file information and the bytes at a given cursor offset decoded
+/// as multiple numeric, text, and floating-point types.
+/// Shown as a right-side panel in the hex view.
 struct DataInspectorView: View {
 
     let data: Data
     let cursorOffset: Int?
     @Binding var isLittleEndian: Bool
 
+    // File info parameters
+    let fileURL: URL?
+    let fileSize: Int
+    let detectedFormat: String?
+    let detectedCategory: String?
+
     @Environment(\.colorScheme) private var colorScheme
 
     private var theme: SyntaxTheme {
         EditorSettingsManager.shared.syntaxTheme(for: colorScheme)
+    }
+
+    /// File attributes fetched once from the filesystem.
+    private var fileAttributes: [FileAttributeKey: Any]? {
+        guard let path = fileURL?.path else { return nil }
+        return try? FileManager.default.attributesOfItem(atPath: path)
     }
 
     /// Up to 8 bytes starting at `cursorOffset`.
@@ -40,9 +53,20 @@ struct DataInspectorView: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider()
-            if cursorOffset != nil && available > 0 {
-                ScrollView {
-                    VStack(spacing: 2) {
+            ScrollView {
+                VStack(spacing: 2) {
+                    // MARK: File Info section (always visible)
+                    fileInfoSection
+
+                    Divider().padding(.vertical, 4)
+
+                    // MARK: Byte Inspector section (conditional on selection)
+                    if cursorOffset != nil && available > 0 {
+                        Text("Byte Inspector")
+                            .font(.system(.subheadline, weight: .semibold))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.bottom, 2)
+
                         inspectorRow("Offset", offsetValue)
                         inspectorRow("Hex", hexValue)
                         inspectorRow("Binary", binaryValue)
@@ -61,20 +85,16 @@ struct DataInspectorView: View {
                         Divider().padding(.vertical, 2)
                         inspectorRow("ASCII", asciiValue)
                         inspectorRow("UTF-8", utf8Value)
+                    } else {
+                        Text("Select a byte to inspect")
+                            .foregroundStyle(.secondary)
+                            .font(.system(.caption))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
                 }
-            } else {
-                Spacer()
-                HStack {
-                    Spacer()
-                    Text("Select a byte")
-                        .foregroundStyle(.secondary)
-                        .font(.system(.caption))
-                    Spacer()
-                }
-                Spacer()
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
             }
         }
         .frame(width: 220)
@@ -98,6 +118,88 @@ struct DataInspectorView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 8)
+    }
+
+    // MARK: - File Info section
+
+    private var fileInfoSection: some View {
+        VStack(spacing: 2) {
+            Text("File Info")
+                .font(.system(.subheadline, weight: .semibold))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.bottom, 2)
+
+            if let url = fileURL {
+                inspectorRow("Filename", url.lastPathComponent)
+                inspectorRow("Path", url.deletingLastPathComponent().path)
+                inspectorRow("Extension", url.pathExtension.isEmpty ? "\u{2014}" : url.pathExtension)
+            }
+
+            inspectorRow("Size", Self.humanReadableSize(fileSize))
+
+            if let format = detectedFormat {
+                inspectorRow("Format", format)
+            }
+            if let category = detectedCategory {
+                inspectorRow("Category", category)
+            }
+
+            if let attrs = fileAttributes {
+                if let created = attrs[.creationDate] as? Date {
+                    inspectorRow("Created", Self.formatDate(created))
+                }
+                if let modified = attrs[.modificationDate] as? Date {
+                    inspectorRow("Modified", Self.formatDate(modified))
+                }
+                if let posix = attrs[.posixPermissions] as? Int {
+                    inspectorRow("Permissions", Self.posixString(posix))
+                }
+            }
+        }
+    }
+
+    // MARK: - Format helpers
+
+    /// Convert byte count to human-readable string, e.g. "1,048,576 bytes (1.0 MB)".
+    static func humanReadableSize(_ bytes: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        let formattedBytes = formatter.string(from: NSNumber(value: bytes)) ?? "\(bytes)"
+
+        let units = ["bytes", "KB", "MB", "GB", "TB"]
+        var value = Double(bytes)
+        var unitIndex = 0
+        while value >= 1024 && unitIndex < units.count - 1 {
+            value /= 1024
+            unitIndex += 1
+        }
+        if unitIndex == 0 {
+            return "\(formattedBytes) bytes"
+        }
+        return "\(formattedBytes) bytes (\(String(format: "%.1f", value)) \(units[unitIndex]))"
+    }
+
+    /// Format a date using medium style.
+    static func formatDate(_ date: Date) -> String {
+        let fmt = DateFormatter()
+        fmt.dateStyle = .medium
+        fmt.timeStyle = .short
+        return fmt.string(from: date)
+    }
+
+    /// Convert POSIX permissions number to rwx string with octal, e.g. "rwxr-xr-x (755)".
+    static func posixString(_ mode: Int) -> String {
+        func triplet(_ val: Int) -> String {
+            let r = (val & 4) != 0 ? "r" : "-"
+            let w = (val & 2) != 0 ? "w" : "-"
+            let x = (val & 1) != 0 ? "x" : "-"
+            return r + w + x
+        }
+        let owner = triplet((mode >> 6) & 7)
+        let group = triplet((mode >> 3) & 7)
+        let other = triplet(mode & 7)
+        let octal = String(format: "%o", mode)
+        return "\(owner)\(group)\(other) (\(octal))"
     }
 
     // MARK: - Row view
@@ -286,7 +388,11 @@ private extension String {
             DataInspectorView(
                 data: "Hello, World!".data(using: .utf8)!,
                 cursorOffset: 0,
-                isLittleEndian: $isLittleEndian
+                isLittleEndian: $isLittleEndian,
+                fileURL: nil,
+                fileSize: 13,
+                detectedFormat: "Plain Text",
+                detectedCategory: "text"
             )
         }
     }

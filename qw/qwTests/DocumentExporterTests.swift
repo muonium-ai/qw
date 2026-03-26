@@ -15,6 +15,7 @@ import XCTest
 import AppKit
 
 final class DocumentExporterTests: XCTestCase {
+    private static let samplePNGData = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7ZxioAAAAASUVORK5CYII=")!
     
     var tempDirectory: URL!
     
@@ -70,10 +71,10 @@ final class DocumentExporterTests: XCTestCase {
     }
 
     func testPNGExportCreatesFile() throws {
-        throw XCTSkip("Crashes in test runner on macOS 26 — AppKit rendering triggers memory corruption")
-        let exporter = DocumentExporter(
+        let exporter = DocumentExportSession(
             text: "print(\"hello\")\n",
             fileType: .swift,
+            fileName: nil,
             theme: .dark,
             includeLineNumbers: false,
             fontSize: 12,
@@ -81,12 +82,23 @@ final class DocumentExporterTests: XCTestCase {
         )
 
         let outputURL = tempDirectory.appendingPathComponent("export.png")
-        try exporter.exportToPNG(to: outputURL)
+        var rendererWasCalled = false
+        try exporter.exportPNG(to: outputURL) { request in
+            rendererWasCalled = true
+            XCTAssertEqual(request.text, "print(\"hello\")\n")
+            XCTAssertEqual(request.fileType, .swift)
+            XCTAssertNil(request.fileName)
+            XCTAssertFalse(request.includeLineNumbers)
+            XCTAssertEqual(request.fontSize, 12)
+            XCTAssertEqual(request.fontName, "Menlo")
+            return Self.samplePNGData
+        }
 
+        XCTAssertTrue(rendererWasCalled)
         XCTAssertTrue(FileManager.default.fileExists(atPath: outputURL.path))
-        let attrs = try FileManager.default.attributesOfItem(atPath: outputURL.path)
-        let size = attrs[.size] as? Int ?? 0
-        XCTAssertGreaterThan(size, 0)
+        let data = try Data(contentsOf: outputURL)
+        XCTAssertGreaterThan(data.count, 0)
+        XCTAssertEqual(Array(data.prefix(4)), [0x89, 0x50, 0x4E, 0x47])
     }
 }
 #endif

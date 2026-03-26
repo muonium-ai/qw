@@ -11,8 +11,51 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
+struct DocumentExportSession {
+    struct PNGRenderRequest {
+        let text: String
+        let fileType: SupportedFileType
+        let fileName: String?
+        let includeLineNumbers: Bool
+        let fontSize: CGFloat
+        let fontName: String
+    }
+
+    typealias PNGRenderer = (_ request: PNGRenderRequest) throws -> Data
+
+    let text: String
+    let fileType: SupportedFileType
+    let fileName: String?
+    let theme: SyntaxTheme
+    let includeLineNumbers: Bool
+    let fontSize: CGFloat
+    let fontName: String
+
+    func makePNGRenderRequest() -> PNGRenderRequest {
+        PNGRenderRequest(
+            text: text,
+            fileType: fileType,
+            fileName: fileName,
+            includeLineNumbers: false,
+            fontSize: fontSize,
+            fontName: fontName
+        )
+    }
+
+    func exportPNG(to url: URL, renderer: PNGRenderer) throws {
+        do {
+            let pngData = try renderer(makePNGRenderRequest())
+            try pngData.write(to: url, options: .atomic)
+        } catch {
+            throw ExportError.pngCreationFailed
+        }
+    }
+}
+
 /// Handles document export to various formats
 class DocumentExporter {
+    typealias PNGRenderRequest = DocumentExportSession.PNGRenderRequest
+    typealias PNGRenderer = DocumentExportSession.PNGRenderer
     
     // MARK: - Properties
     
@@ -87,7 +130,7 @@ class DocumentExporter {
         let includeLineNumbers = includeLineNumbers ?? self.includeLineNumbers
         let lines = text.components(separatedBy: "\n")
         let result = NSMutableAttributedString()
-        let highlighter = SyntaxHighlighter(fileType: fileType, theme: theme, fileName: fileName)
+        let tokenizer = SyntaxTokenizer(fileType: fileType, fileName: fileName)
         let font = getFont()
         
         // Calculate line number width based on max digits needed
@@ -117,7 +160,7 @@ class DocumentExporter {
                 .paragraphStyle: paragraphStyle
             ], range: NSRange(location: 0, length: (text as NSString).length))
 
-            let tokens = highlighter.tokenize(text)
+            let tokens = tokenizer.tokenize(text)
             for token in tokens {
                 let nsRange = NSRange(token.range, in: text)
                 if nsRange.location != NSNotFound && nsRange.location + nsRange.length <= (text as NSString).length {
@@ -138,7 +181,7 @@ class DocumentExporter {
             .paragraphStyle: paragraphStyle
         ], range: NSRange(location: 0, length: (text as NSString).length))
 
-        let tokens = highlighter.tokenize(text)
+        let tokens = tokenizer.tokenize(text)
         for token in tokens {
             let nsRange = NSRange(token.range, in: text)
             if nsRange.location != NSNotFound && nsRange.location + nsRange.length <= (text as NSString).length {
@@ -184,6 +227,27 @@ class DocumentExporter {
 
         return result
     }
+
+    private func makeRenderOptions() -> RenderOptions {
+        RenderOptions(
+            width: nil,
+            padding: 18,
+            background: nsColor(from: theme.background),
+            foreground: nsColor(from: theme.plain)
+        )
+    }
+
+    private func currentSession() -> DocumentExportSession {
+        DocumentExportSession(
+            text: text,
+            fileType: fileType,
+            fileName: fileName,
+            theme: theme,
+            includeLineNumbers: includeLineNumbers,
+            fontSize: fontSize,
+            fontName: fontName
+        )
+    }
     
     // MARK: - Print
     
@@ -218,14 +282,7 @@ class DocumentExporter {
     
     func exportToPDF(to url: URL) throws {
         let attributedString = createAttributedString(includeLineNumbers: false)
-        let options = RenderOptions(
-            width: nil,
-            padding: 18,
-            background: nsColor(from: theme.background),
-            foreground: nsColor(from: theme.plain)
-        )
-
-        let pdfData = CodeRender.renderPDF(attributed: attributedString, options: options)
+        let pdfData = CodeRender.renderPDF(attributed: attributedString, options: makeRenderOptions())
         if pdfData.isEmpty {
             throw ExportError.pdfCreationFailed
         }
@@ -236,20 +293,18 @@ class DocumentExporter {
     // MARK: - Export to PNG
     
     func exportToPNG(to url: URL) throws {
-        let attributedString = createAttributedString(includeLineNumbers: false)
-        let options = RenderOptions(
-            width: nil,
-            padding: 18,
-            background: nsColor(from: theme.background),
-            foreground: nsColor(from: theme.plain)
-        )
-
-        do {
-            let pngData = try CodeRender.renderPNG(attributed: attributedString, options: options, scale: 2.0)
-            try pngData.write(to: url, options: .atomic)
-        } catch {
-            throw ExportError.pngCreationFailed
+        try currentSession().exportPNG(to: url) { request in
+            let attributedString = self.createAttributedString(includeLineNumbers: request.includeLineNumbers)
+            return try CodeRender.renderPNG(
+                attributed: attributedString,
+                options: self.makeRenderOptions(),
+                scale: 2.0
+            )
         }
+    }
+
+    func exportToPNG(to url: URL, renderer: PNGRenderer) throws {
+        try currentSession().exportPNG(to: url, renderer: renderer)
     }
     
     // MARK: - Show Export Dialogs

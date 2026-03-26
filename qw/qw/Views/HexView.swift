@@ -163,6 +163,21 @@ struct HexView: View {
         isEditable ? hexDocumentStorage.currentData : (readOnlyData ?? Data())
     }
 
+    /// Whether the current file is detected as audio/video.
+    private var isMediaFile: Bool {
+        let data = displayData
+        if let sig = MagicBytes.detect(from: data),
+           FFprobeService.isAudioVideoFormat(signatureName: sig.name) {
+            return true
+        }
+        if let dbSig = FormatDatabase.shared.detectSignature(from: data),
+           FFprobeService.isAudioVideoCategory(dbSig.category) ||
+           FFprobeService.isAudioVideoFormat(signatureName: dbSig.name) {
+            return true
+        }
+        return false
+    }
+
     /// Total number of 16-byte rows needed to display the data.
     private var rowCount: Int {
         max((displayData.count + 15) / 16, 0)
@@ -383,15 +398,17 @@ struct HexView: View {
                 }
                 .help("Toggle Format Annotations")
 
-                Button {
-                    showMediaMetadata.toggle()
-                    if showMediaMetadata {
-                        triggerFFprobeIfNeeded()
+                if isMediaFile {
+                    Button {
+                        showMediaMetadata.toggle()
+                        if showMediaMetadata {
+                            triggerFFprobeIfNeeded()
+                        }
+                    } label: {
+                        Image(systemName: "film")
                     }
-                } label: {
-                    Image(systemName: "film")
+                    .help("Toggle Media Metadata (ffprobe)")
                 }
-                .help("Toggle Media Metadata (ffprobe)")
             }
         }
         .onAppear {

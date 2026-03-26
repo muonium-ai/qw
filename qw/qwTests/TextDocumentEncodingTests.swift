@@ -109,25 +109,50 @@ final class TextDocumentEncodingTests: XCTestCase {
     // MARK: - fileWrapper Tests (text documents)
 
     func testFileWrapper_textDocument_createsUTF8Content() throws {
-        throw XCTSkip("FileDocumentWriteConfiguration has no public init on macOS 26")
+        let text = "Hello, UTF-8!"
+        let doc = TextDocument(text: text)
+        let wrapper = doc.makeFileWrapper()
+
+        XCTAssertEqual(wrapper.regularFileContents, text.data(using: .utf8))
     }
 
     func testFileWrapper_emptyTextDocument_createsEmptyData() throws {
-        throw XCTSkip("FileDocumentWriteConfiguration has no public init on macOS 26")
+        let doc = TextDocument(text: "")
+        let wrapper = doc.makeFileWrapper()
+
+        XCTAssertEqual(wrapper.regularFileContents, Data())
     }
 
     func testFileWrapper_unicodeText_roundtripsCorrectly() throws {
-        throw XCTSkip("FileDocumentWriteConfiguration has no public init on macOS 26")
+        let text = "Unicode: cafe\u{0301} 日本語 🌍"
+        let doc = TextDocument(text: text)
+        let wrapper = doc.makeFileWrapper()
+
+        let data = try XCTUnwrap(wrapper.regularFileContents)
+        XCTAssertEqual(String(data: data, encoding: .utf8), text)
     }
 
     // MARK: - fileWrapper Tests (binary documents)
 
     func testFileWrapper_binaryDetected_returnsRawDataUnchanged() throws {
-        throw XCTSkip("FileDocumentWriteConfiguration has no public init on macOS 26")
+        var doc = TextDocument(text: "")
+        let originalData = Data([0x89, 0x50, 0x4E, 0x47, 0x00, 0x0D, 0x0A])
+        doc.isBinaryDetected = true
+        doc.rawData = originalData
+
+        let wrapper = doc.makeFileWrapper()
+        XCTAssertEqual(wrapper.regularFileContents, originalData)
     }
 
     func testFileWrapper_binaryDetected_textModificationDoesNotAffectOutput() throws {
-        throw XCTSkip("FileDocumentWriteConfiguration has no public init on macOS 26")
+        var doc = TextDocument(text: "")
+        let originalData = Data([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10])
+        doc.isBinaryDetected = true
+        doc.rawData = originalData
+        doc.text = "this should be ignored for binary output"
+
+        let wrapper = doc.makeFileWrapper()
+        XCTAssertEqual(wrapper.regularFileContents, originalData)
     }
 
     // MARK: - fileWrapper behavior verified indirectly

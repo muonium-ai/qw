@@ -129,12 +129,17 @@ struct TextDocument: FileDocument {
         }
     }
 
-    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+    /// Shared write path used by FileDocument conformance and tests.
+    func makeFileWrapper() -> FileWrapper {
         if isBinaryDetected {
             // Write back the original raw data for binary files
             return .init(regularFileWithContents: rawData)
         }
         let data = text.data(using: .utf8) ?? Data()
         return .init(regularFileWithContents: data)
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        makeFileWrapper()
     }
 }

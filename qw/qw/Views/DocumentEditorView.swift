@@ -22,6 +22,9 @@ struct DocumentEditorView: View {
     @State private var fileType: SupportedFileType = .plainText
     @State private var isReadOnly: Bool = false
     @State private var isHexMode: Bool = false
+    @State private var isImageMode: Bool = false
+    @State private var isVideoMode: Bool = false
+    @State private var isAudioMode: Bool = false
     @State private var showBinaryAlert: Bool = false
     @StateObject private var searchState = SearchState()
 
@@ -33,7 +36,7 @@ struct DocumentEditorView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Search/Replace bar (hidden in hex mode)
-            if searchState.isVisible && !isHexMode {
+            if searchState.isVisible && !isHexMode && !isImageMode {
                 SearchReplaceView(
                     searchText: $searchState.searchText,
                     replaceText: $searchState.replaceText,
@@ -64,49 +67,10 @@ struct DocumentEditorView: View {
             }
 
             // Editor or Hex View
-            if isHexMode && isComparing, let compData = comparisonData {
-                VStack(spacing: 0) {
-                    HStack {
-                        Spacer()
-                        Button("Close Comparison") {
-                            isComparing = false
-                            comparisonData = nil
-                            comparisonName = ""
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 4)
-                    }
-                    .background {
-                        #if os(macOS)
-                        Color(nsColor: .windowBackgroundColor)
-                        #else
-                        Color(uiColor: .secondarySystemBackground)
-                        #endif
-                    }
-                    HexDiffView(
-                        dataA: document.rawData,
-                        dataB: compData,
-                        nameA: fileURL?.lastPathComponent ?? "Current File",
-                        nameB: comparisonName
-                    )
-                }
-                .accessibilityIdentifier("hexDiffViewer")
-            } else if isHexMode {
-                HexView(data: document.rawData, fileURL: fileURL)
-                    .accessibilityIdentifier("hexViewer")
-            } else {
-                CodeEditorView(
-                    text: $document.text,
-                    fileType: fileType,
-                    fileName: fileURL?.lastPathComponent,
-                    isReadOnly: isReadOnly,
-                    searchState: searchState
-                )
-                .accessibilityIdentifier("documentEditor")
-            }
+            mainContentView
         }
         #if os(macOS)
-        .background(WindowTitleModeUpdater(isReadOnly: isReadOnly, isHexMode: isHexMode))
+        .background(WindowTitleModeUpdater(isReadOnly: isReadOnly, isHexMode: isHexMode, isImageMode: isImageMode, isVideoMode: isVideoMode, isAudioMode: isAudioMode))
         #endif
         .onAppear {
             updateFileType()
@@ -128,9 +92,17 @@ struct DocumentEditorView: View {
                 isReadOnly = false
             }
 
-            // Auto-detect binary files and prompt for hex mode
+            // Auto-detect binary files: open images/videos/audio directly, prompt for others
             if document.isBinaryDetected {
-                showBinaryAlert = true
+                if isImageFile(data: document.rawData) {
+                    isImageMode = true
+                } else if isVideoFile(data: document.rawData) {
+                    isVideoMode = true
+                } else if isAudioFile(data: document.rawData) {
+                    isAudioMode = true
+                } else {
+                    showBinaryAlert = true
+                }
             }
         }
         .onChange(of: fileURL) { _, _ in
@@ -143,6 +115,21 @@ struct DocumentEditorView: View {
         ) {
             Button("Hex Mode") {
                 isHexMode = true
+            }
+            if isImageFile(data: document.rawData) {
+                Button("View Image") {
+                    isImageMode = true
+                }
+            }
+            if isVideoFile(data: document.rawData) {
+                Button("Play Video") {
+                    isVideoMode = true
+                }
+            }
+            if isAudioFile(data: document.rawData) {
+                Button("Play Audio") {
+                    isAudioMode = true
+                }
             }
             #if os(macOS)
             if let url = fileURL {
@@ -189,6 +176,9 @@ struct DocumentEditorView: View {
         private struct WindowTitleModeUpdater: NSViewRepresentable {
             let isReadOnly: Bool
             let isHexMode: Bool
+            let isImageMode: Bool
+            let isVideoMode: Bool
+            let isAudioMode: Bool
 
             func makeNSView(context: Context) -> NSView {
                 let view = NSView(frame: .zero)
@@ -209,6 +199,12 @@ struct DocumentEditorView: View {
                 var modeText = isReadOnly ? "Read Only" : "Write"
                 if isHexMode {
                     modeText = "Hex — \(modeText)"
+                } else if isImageMode {
+                    modeText = "Image"
+                } else if isVideoMode {
+                    modeText = "Video"
+                } else if isAudioMode {
+                    modeText = "Audio"
                 }
                 if #available(macOS 11.0, *) {
                     window.subtitle = modeText
@@ -219,7 +215,7 @@ struct DocumentEditorView: View {
             }
 
             private func stripModeSuffix(from title: String) -> String {
-                let suffixes = [" — Read Only", " — Write", " — Hex — Read Only", " — Hex — Write"]
+                let suffixes = [" — Read Only", " — Write", " — Hex — Read Only", " — Hex — Write", " — Image", " — Video", " — Audio"]
                 for suffix in suffixes where title.hasSuffix(suffix) {
                     return String(title.dropLast(suffix.count))
                 }
@@ -227,7 +223,7 @@ struct DocumentEditorView: View {
             }
         }
         #endif
-    
+
     #if os(macOS)
     private func showQuickLookPreview(for url: URL) {
         let process = Process()
@@ -271,6 +267,108 @@ struct DocumentEditorView: View {
     }
     #endif
 
+    // MARK: - Main content view (extracted to help the type-checker)
+
+    @ViewBuilder
+    private var mainContentView: some View {
+        if isHexMode && isComparing, let compData = comparisonData {
+            VStack(spacing: 0) {
+                HStack {
+                    Spacer()
+                    Button("Close Comparison") {
+                        isComparing = false
+                        comparisonData = nil
+                        comparisonName = ""
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
+                }
+                .background {
+                    #if os(macOS)
+                    Color(nsColor: .windowBackgroundColor)
+                    #else
+                    Color(uiColor: .secondarySystemBackground)
+                    #endif
+                }
+                HexDiffView(
+                    dataA: document.rawData,
+                    dataB: compData,
+                    nameA: fileURL?.lastPathComponent ?? "Current File",
+                    nameB: comparisonName
+                )
+            }
+            .accessibilityIdentifier("hexDiffViewer")
+        } else if isHexMode {
+            HexView(data: document.rawData, fileURL: fileURL)
+                .accessibilityIdentifier("hexViewer")
+        } else if isImageMode && document.isBinaryDetected {
+            ImageViewerView(data: document.rawData, fileURL: fileURL)
+                .accessibilityIdentifier("imageViewer")
+        } else if isVideoMode && document.isBinaryDetected, let url = fileURL {
+            videoPlayerContent(url: url)
+        } else if isAudioMode && document.isBinaryDetected, let url = fileURL {
+            audioPlayerContent(url: url)
+        } else {
+            CodeEditorView(
+                text: $document.text,
+                fileType: fileType,
+                fileName: fileURL?.lastPathComponent,
+                isReadOnly: isReadOnly,
+                searchState: searchState
+            )
+            .accessibilityIdentifier("documentEditor")
+        }
+    }
+
+    /// Returns `true` when the data's magic bytes indicate an image format.
+    private func isImageFile(data: Data) -> Bool {
+        guard let sig = MagicBytes.detect(from: data) else { return false }
+        let imageKeywords = ["PNG", "JPEG", "GIF", "BMP", "TIFF", "WebP", "ICO"]
+        return imageKeywords.contains(where: { sig.name.contains($0) })
+    }
+
+    /// Returns the video player view (macOS only, text fallback elsewhere).
+    @ViewBuilder
+    private func videoPlayerContent(url: URL) -> some View {
+        #if os(macOS)
+        VideoPlayerView(fileURL: url)
+            .accessibilityIdentifier("videoPlayer")
+        #else
+        Text("Video playback is not supported on this platform.")
+            .foregroundColor(.secondary)
+        #endif
+    }
+
+    /// Returns `true` when the data's magic bytes indicate a video format.
+    private func isVideoFile(data: Data) -> Bool {
+        guard let sig = MagicBytes.detect(from: data) else { return false }
+        let name = sig.name.lowercased()
+        let videoKeywords = ["mp4", "video", "avi", "mkv", "webm", "mov", "flv", "mpeg", "matroska"]
+        return videoKeywords.contains(where: { name.contains($0) })
+    }
+
+    /// Returns the audio player view (macOS only, text fallback elsewhere).
+    @ViewBuilder
+    private func audioPlayerContent(url: URL) -> some View {
+        #if os(macOS)
+        AudioPlayerView(fileURL: url)
+            .accessibilityIdentifier("audioPlayer")
+        #else
+        Text("Audio playback is not supported on this platform.")
+            .foregroundColor(.secondary)
+        #endif
+    }
+
+    /// Returns `true` when the data's magic bytes indicate an audio-only format.
+    private func isAudioFile(data: Data) -> Bool {
+        guard let sig = MagicBytes.detect(from: data) else { return false }
+        let name = sig.name
+        // RIFF can be WAV or AVI — only treat as audio when it is not also video
+        if isVideoFile(data: data) { return false }
+        let audioKeywords = ["WAV", "RIFF", "MP3", "FLAC", "OGG", "AAC", "M4A", "AIFF", "MIDI", "Audio", "Opus"]
+        return audioKeywords.contains(where: { name.contains($0) })
+    }
+
     private func updateFileType() {
         if let url = fileURL {
             fileType = SupportedFileType.from(url: url)
@@ -278,7 +376,7 @@ struct DocumentEditorView: View {
             fileType = document.fileType
         }
     }
-    
+
     #if os(macOS)
     private func exportDocument() {
         let savePanel = NSSavePanel()
@@ -288,14 +386,14 @@ struct DocumentEditorView: View {
         savePanel.title = "Save As"
         savePanel.message = "Choose a location to save your file"
         savePanel.nameFieldLabel = "File Name:"
-        
+
         // Set default filename from current file or use "Untitled"
         if let url = fileURL {
             savePanel.nameFieldStringValue = url.lastPathComponent
         } else {
             savePanel.nameFieldStringValue = "Untitled.\(fileType.rawValue)"
         }
-        
+
         savePanel.begin { response in
             if response == .OK, let url = savePanel.url {
                 do {
@@ -312,7 +410,7 @@ struct DocumentEditorView: View {
             }
         }
     }
-    
+
     private func printDocument() {
         let settings = EditorSettingsManager.shared
         let exporter = DocumentExporter(
@@ -326,7 +424,7 @@ struct DocumentEditorView: View {
         )
         exporter.printDocument()
     }
-    
+
     private func exportAsPDF() {
         let settings = EditorSettingsManager.shared
         let exporter = DocumentExporter(
@@ -338,11 +436,11 @@ struct DocumentEditorView: View {
             fontSize: settings.fontSize,
             fontName: settings.selectedFont.fontName
         )
-        
+
         let defaultName = fileURL?.lastPathComponent ?? "Untitled"
         exporter.showPDFExportDialog(defaultName: defaultName)
     }
-    
+
     private func exportAsPNG() {
         let settings = EditorSettingsManager.shared
         let exporter = DocumentExporter(
@@ -354,7 +452,7 @@ struct DocumentEditorView: View {
             fontSize: settings.fontSize,
             fontName: settings.selectedFont.fontName
         )
-        
+
         let defaultName = fileURL?.lastPathComponent ?? "Untitled"
         exporter.showPNGExportDialog(defaultName: defaultName)
     }
@@ -432,12 +530,12 @@ extension FocusedValues {
         get { self[DocumentExportPNGActionFocusKey.self] }
         set { self[DocumentExportPNGActionFocusKey.self] = newValue }
     }
-    
+
     var toggleReadOnlyAction: (() -> Void)? {
         get { self[ToggleReadOnlyActionFocusKey.self] }
         set { self[ToggleReadOnlyActionFocusKey.self] = newValue }
     }
-    
+
     var isReadOnly: Bool? {
         get { self[IsReadOnlyFocusKey.self] }
         set { self[IsReadOnlyFocusKey.self] = newValue }

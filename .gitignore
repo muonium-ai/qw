@@ -1,3 +1,5 @@
+tmp/
+*.log
 # Build output
 build/
 DerivedData/

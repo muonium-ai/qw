@@ -143,46 +143,54 @@ struct MediaMetadataPanel: View {
                 }
 
                 // Streams
-                for (index, stream) in metadata.streams.enumerated() {
-                    let title: String
-                    switch stream.codecType {
-                    case "video": title = "Video Stream \(index)"
-                    case "audio": title = "Audio Stream \(index)"
-                    default: title = "\(stream.codecType.capitalized) Stream \(index)"
-                    }
-
-                    sectionHeader(title)
-
-                    if let codec = stream.codecLongName ?? stream.codecName {
-                        metadataRow(label: "Codec", value: codec)
-                    }
-
-                    if stream.codecType == "video" {
-                        if let w = stream.width, let h = stream.height {
-                            metadataRow(label: "Resolution", value: "\(w) x \(h)")
-                        }
-                        if let fps = FFprobeMetadata.formatFrameRate(stream.frameRate) {
-                            metadataRow(label: "Frame Rate", value: fps)
-                        }
-                    }
-
-                    if stream.codecType == "audio" {
-                        if let sr = stream.sampleRate {
-                            let srKHz = (Double(sr) ?? 0) / 1000.0
-                            if srKHz > 0 {
-                                metadataRow(label: "Sample Rate", value: String(format: "%.1f kHz", srKHz))
-                            } else {
-                                metadataRow(label: "Sample Rate", value: "\(sr) Hz")
-                            }
-                        }
-                        if let ch = stream.channels {
-                            let layout = stream.channelLayout ?? (ch == 1 ? "mono" : ch == 2 ? "stereo" : "\(ch)ch")
-                            metadataRow(label: "Channels", value: "\(ch) (\(layout))")
-                        }
-                    }
+                ForEach(Array(metadata.streams.enumerated()), id: \.offset) { index, stream in
+                    streamSection(index: index, stream: stream)
                 }
             }
             .padding(.vertical, 4)
+        }
+    }
+
+    // MARK: - Stream section
+
+    @ViewBuilder
+    private func streamSection(index: Int, stream: FFprobeMetadata.StreamInfo) -> some View {
+        let title: String = {
+            switch stream.codecType {
+            case "video": return "Video Stream \(index)"
+            case "audio": return "Audio Stream \(index)"
+            default: return "\(stream.codecType.capitalized) Stream \(index)"
+            }
+        }()
+
+        sectionHeader(title)
+
+        if let codec = stream.codecLongName ?? stream.codecName {
+            metadataRow(label: "Codec", value: codec)
+        }
+
+        if stream.codecType == "video" {
+            if let w = stream.width, let h = stream.height {
+                metadataRow(label: "Resolution", value: "\(w) x \(h)")
+            }
+            if let fps = FFprobeMetadata.formatFrameRate(stream.frameRate) {
+                metadataRow(label: "Frame Rate", value: fps)
+            }
+        }
+
+        if stream.codecType == "audio" {
+            if let sr = stream.sampleRate {
+                let srKHz = (Double(sr) ?? 0) / 1000.0
+                if srKHz > 0 {
+                    metadataRow(label: "Sample Rate", value: String(format: "%.1f kHz", srKHz))
+                } else {
+                    metadataRow(label: "Sample Rate", value: "\(sr) Hz")
+                }
+            }
+            if let ch = stream.channels {
+                let layout = stream.channelLayout ?? (ch == 1 ? "mono" : ch == 2 ? "stereo" : "\(ch)ch")
+                metadataRow(label: "Channels", value: "\(ch) (\(layout))")
+            }
         }
     }
 

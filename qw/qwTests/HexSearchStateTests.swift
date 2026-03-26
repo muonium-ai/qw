@@ -12,53 +12,46 @@ import XCTest
 
 final class HexSearchStateTests: XCTestCase {
 
-    // HexSearchState is an ObservableObject (class) that crashes on dealloc
-    // in the test runner due to macOS 26 Swift concurrency memory corruption.
-    // Skip all tests until Apple fixes the underlying issue.
-    override func setUpWithError() throws {
-        throw XCTSkip("HexSearchState crashes on dealloc in macOS 26 test runner (ObservableObject memory corruption)")
-    }
-
     // MARK: - parseHexPattern
 
     func testParseHexPatternSpaceSeparated() {
-        let state = HexSearchState()
+        let state = HexSearchSession()
         let result = state.parseHexPattern("FF D8 FF")
         XCTAssertEqual(result, [0xFF, 0xD8, 0xFF])
     }
 
     func testParseHexPatternContiguousLowercase() {
-        let state = HexSearchState()
+        let state = HexSearchSession()
         let result = state.parseHexPattern("ffd8ff")
         XCTAssertEqual(result, [0xFF, 0xD8, 0xFF])
     }
 
     func testParseHexPatternSingleByte() {
-        let state = HexSearchState()
+        let state = HexSearchSession()
         let result = state.parseHexPattern("00")
         XCTAssertEqual(result, [0x00])
     }
 
     func testParseHexPatternEmptyReturnsNil() {
-        let state = HexSearchState()
+        let state = HexSearchSession()
         let result = state.parseHexPattern("")
         XCTAssertNil(result)
     }
 
     func testParseHexPatternOddLengthReturnsNil() {
-        let state = HexSearchState()
+        let state = HexSearchSession()
         let result = state.parseHexPattern("F")
         XCTAssertNil(result)
     }
 
     func testParseHexPatternNonHexReturnsNil() {
-        let state = HexSearchState()
+        let state = HexSearchSession()
         let result = state.parseHexPattern("GG")
         XCTAssertNil(result)
     }
 
     func testParseHexPatternOddAfterStrippingSpacesReturnsNil() {
-        let state = HexSearchState()
+        let state = HexSearchSession()
         let result = state.parseHexPattern("FF D8 F")
         XCTAssertNil(result)
     }
@@ -66,7 +59,7 @@ final class HexSearchStateTests: XCTestCase {
     // MARK: - patternBytes
 
     func testPatternBytesHexMode() {
-        let state = HexSearchState()
+        var state = HexSearchSession()
         state.searchMode = .hexPattern
         state.searchText = "FF00"
         let result = state.patternBytes()
@@ -74,7 +67,7 @@ final class HexSearchStateTests: XCTestCase {
     }
 
     func testPatternBytesAsciiMode() {
-        let state = HexSearchState()
+        var state = HexSearchSession()
         state.searchMode = .asciiString
         state.searchText = "abc"
         let result = state.patternBytes()
@@ -84,7 +77,7 @@ final class HexSearchStateTests: XCTestCase {
     // MARK: - findMatches
 
     func testFindMatchesEmptySearchText() {
-        let state = HexSearchState()
+        var state = HexSearchSession()
         state.searchText = ""
         state.findMatches(in: Data([0x01, 0x02, 0x03]))
         XCTAssertTrue(state.matches.isEmpty)
@@ -92,7 +85,7 @@ final class HexSearchStateTests: XCTestCase {
     }
 
     func testFindMatchesPatternNotFound() {
-        let state = HexSearchState()
+        var state = HexSearchSession()
         state.searchMode = .hexPattern
         state.searchText = "DEAD"
         state.findMatches(in: Data([0x01, 0x02, 0x03, 0x04]))
@@ -100,7 +93,7 @@ final class HexSearchStateTests: XCTestCase {
     }
 
     func testFindMatchesSingleMatch() {
-        let state = HexSearchState()
+        var state = HexSearchSession()
         state.searchMode = .hexPattern
         state.searchText = "0203"
         let data = Data([0x01, 0x02, 0x03, 0x04])
@@ -110,7 +103,7 @@ final class HexSearchStateTests: XCTestCase {
     }
 
     func testFindMatchesMultipleNonOverlapping() {
-        let state = HexSearchState()
+        var state = HexSearchSession()
         state.searchMode = .hexPattern
         state.searchText = "FF"
         let data = Data([0xFF, 0x00, 0xFF, 0x00, 0xFF])
@@ -124,7 +117,7 @@ final class HexSearchStateTests: XCTestCase {
     func testFindMatchesNonOverlappingRepeatedPattern() {
         // "AAAA" (2 bytes: 0xAA, 0xAA) in 3 bytes: AA AA AA
         // Non-overlapping: match at 0, skip to 2, only 1 byte left → 1 match
-        let state = HexSearchState()
+        var state = HexSearchSession()
         state.searchMode = .hexPattern
         state.searchText = "AAAA"
         let data = Data([0xAA, 0xAA, 0xAA])
@@ -134,7 +127,7 @@ final class HexSearchStateTests: XCTestCase {
     }
 
     func testFindMatchesAsciiMode() {
-        let state = HexSearchState()
+        var state = HexSearchSession()
         state.searchMode = .asciiString
         state.searchText = "hello"
         let str = "hello world hello"
@@ -148,7 +141,7 @@ final class HexSearchStateTests: XCTestCase {
     // MARK: - Navigation
 
     func testFindNextWrapsAround() {
-        let state = HexSearchState()
+        var state = HexSearchSession()
         state.searchMode = .hexPattern
         state.searchText = "FF"
         let data = Data([0xFF, 0x00, 0xFF])
@@ -164,7 +157,7 @@ final class HexSearchStateTests: XCTestCase {
     }
 
     func testFindPreviousWrapsAround() {
-        let state = HexSearchState()
+        var state = HexSearchSession()
         state.searchMode = .hexPattern
         state.searchText = "FF"
         let data = Data([0xFF, 0x00, 0xFF])
@@ -180,14 +173,14 @@ final class HexSearchStateTests: XCTestCase {
     }
 
     func testFindNextOnEmptyMatchesDoesNothing() {
-        let state = HexSearchState()
+        var state = HexSearchSession()
         XCTAssertTrue(state.matches.isEmpty)
         state.findNext()
         XCTAssertEqual(state.currentMatchIndex, 0)
     }
 
     func testFindPreviousOnEmptyMatchesDoesNothing() {
-        let state = HexSearchState()
+        var state = HexSearchSession()
         XCTAssertTrue(state.matches.isEmpty)
         state.findPrevious()
         XCTAssertEqual(state.currentMatchIndex, 0)
